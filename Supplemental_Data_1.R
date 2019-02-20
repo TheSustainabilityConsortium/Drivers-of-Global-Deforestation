@@ -16,18 +16,17 @@ library(rattle)
 #---------------
 # Set workspace #
 #---------------
-setwd("D:/")
+setwd("E:/Forestry Model/Consolidated/")
 
 #---------------
 # Load input datasets #
 #---------------
 GoodeR_Boundaries_Region=read_csv("GoodeR_Boundaries_Region.csv")
-GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv")
-TrainingPoints_PrimaryData=read_csv("TrainingPoints_PrimaryData.csv")
+GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv", guess_max = 6000000)
+TrainingPoints_PrimaryData=read_csv("TrainingPoints_PrimaryData.csv", guess_max = 5000)
 GoodeR_SecondaryData=GoodeR_SecondaryData%>%
   filter(Loss_10kMean_20002016>0)
-LossMaskFull= read_csv("D:/OneDrive - The Sustainability Consortium/Working Files/Forestry Model/LossMaskFull_20002016.csv", 
-                       col_types = cols(Loss_10kMean_20002016 = col_number()))
+LossMaskFull= read_csv("LossMaskFull_20002016.csv", col_types = cols(Loss_10kMean_20002016 = col_number()))
 
 LossMask1pcnt=LossMaskFull%>%
   select(GoodeR.ID,Loss_10kMean_20002016)%>%
@@ -44,14 +43,14 @@ LossMask005=LossMaskFull%>%
 #---------------
 
 # import primary data into big list #
-FileList=as.data.frame(list.files(path = "D:/OneDrive - The Sustainability Consortium/Working Files/Forestry Model/R_ModelInputs_SecondaryData",
+FileList=as.data.frame(list.files(path = "./R_ModelInputs_SecondaryData",
                                   pattern = ".tif$", all.files = FALSE,
                                   full.names = FALSE, recursive = FALSE,
                                   ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE))
 names(FileList)=c("FileName")
 
 for(NAME in FileList$FileName){
-  data=raster(paste("D:/OneDrive - The Sustainability Consortium/Working Files/Forestry Model/R_ModelInputs_SecondaryData/",NAME,sep=""))
+  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
   
   ifelse(nrow(data)!=1737,print(NAME),ifelse(ncol(data)!=4008,print(NAME),print("AllGood")))
 }
@@ -74,7 +73,7 @@ TrainingPoints_PrimaryData=TrainingPoints%>%
 #write_csv(TrainingPoints,"TrainingPoints19.csv")
 
 for(NAME in FileList$FileName){
-  data=raster(paste("D:/OneDrive - The Sustainability Consortium/Working Files/Forestry Model/R_ModelInputs_SecondaryData/",NAME,sep=""))
+  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
   NAME2=NAME%>%
     str_replace("^Goode_", "")%>%
     str_replace(".tif$", "")
@@ -119,7 +118,7 @@ GoodeR_SecondaryData$TrainingID[is.na(GoodeR_SecondaryData$TrainingID)]=0
 
 for(NAME in FileList$FileName){
   
-  data=raster(paste("D:/OneDrive - The Sustainability Consortium/Working Files/Forestry Model/R_ModelInputs_SecondaryData/",NAME,sep=""))
+  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
   
   NAME2=NAME%>%
     str_replace("^Goode_", "")%>%
@@ -146,8 +145,10 @@ GoodeR_SecondaryData=GoodeR_SecondaryData%>%
   filter(!is.na(Region))
 
 #-----
+# Don't run this.  Looks like a 'tool', not part of the model.
+#-----
 
-temp=raster(paste("D:/OneDrive - The Sustainability Consortium/Working Files/Forestry Model/R_ModelInputs_SecondaryData/Goode_PopulationDifference20002015_10kMax1kMean.tif"))
+temp=raster(paste("./R_ModelInputs_SecondaryData/Goode_PopulationDifference20002015_10kMax1kMean.tif"))
 data=temp%>%
   as.vector()%>%
   as.data.frame()
@@ -2986,12 +2987,12 @@ temp=GoodeR_SecondaryData%>%
 Total=sum(temp$Loss_10kSum_20002016)
 
 LossClassified=temp%>%
-  left_join(MaxClass_Final_17_50uncertain,by="GoodeR.ID")%>%
+  left_join(MaxClass_Final_19_50uncertain,by="GoodeR.ID")%>%
   filter(Class!=0)
 LossClassified=sum(LossClassified$Loss_10kSum_20002016)/Total
 
 LossUnClassified=temp%>%
-  left_join(MaxClass_Final_17_50uncertain,by="GoodeR.ID")%>%
+  left_join(MaxClass_Final_19_50uncertain,by="GoodeR.ID")%>%
   filter(Class==0)
 LossUnClassified=sum(LossUnClassified$Loss_10kSum_20002016)/Total
 
@@ -3035,7 +3036,7 @@ write_csv(Goode_FinalClassification19_Expand_05pcnt,"FinalClass_19_05pcnt.csv")
 # Generate Loss Masks for Final classifiacation (weight classification by loss)
 #--------------------------------------------------------
 
-FinalClass_19 = read_csv("D:/OneDrive - The Sustainability Consortium/Working Files/Forestry Model/FinalClass_19_05pcnt.csv", col_types = cols(Class.Final = col_integer()))
+FinalClass_19 = read_csv("./FinalClass_19_05pcnt.csv", col_types = cols(Class.Final = col_integer()))
 
 GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv")
 

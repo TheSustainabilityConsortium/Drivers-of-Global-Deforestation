@@ -3003,7 +3003,8 @@ LossUnClassified
 
 #IMPORTANT
 #---------------
-#####   ***** In ArcMap / other GIS software, expand classification into all unclassified cells with loss (assigns nearest neighbor class) ***** #####
+#####   Run "Expand Final Classification" model, found in "Forestry Models 2.tbx".
+# This uses the Expand tool to classify uncertain pixels (model certainty < 50%) using nearest neighbor technique
 #---------------
 
 

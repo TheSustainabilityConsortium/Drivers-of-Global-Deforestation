@@ -22,10 +22,13 @@ setwd("E:/Forestry Model/Consolidated/")
 # Load input datasets #
 #---------------
 GoodeR_Boundaries_Region=read_csv("GoodeR_Boundaries_Region.csv")
+# GoodeR_SecondaryData can be calculated below, or imported here
 GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv", guess_max = 6000000)
+# TrainingPoints_PrimaryData can be calculated below, or imported here
 TrainingPoints_PrimaryData=read_csv("TrainingPoints_PrimaryData.csv", guess_max = 5000)
 GoodeR_SecondaryData=GoodeR_SecondaryData%>%
   filter(Loss_10kMean_20002016>0)
+TrainingPoints = read_csv("TrainingPoints_19_full.csv")
 LossMaskFull= read_csv("LossMaskFull_20002016.csv", col_types = cols(Loss_10kMean_20002016 = col_number()))
 
 LossMask1pcnt=LossMaskFull%>%
@@ -39,7 +42,8 @@ LossMask005=LossMaskFull%>%
 
 
 #---------------
-#Create Training points with data #
+# Create Training points with data #
+# This generates TrainingPoints_PrimaryData, so don't run it if you're importing that file
 #---------------
 
 # import primary data into big list #
@@ -56,9 +60,9 @@ for(NAME in FileList$FileName){
 }
 
 
-TrainingPoints = read_csv("TrainingPoints_19_full.csv")
 temp=as.data.frame(c(1:nrow(TrainingPoints)))
 names(temp)=c("TrainingID")
+# Make columns for each driver (1 is that class, 0 is not that class)
 TrainingPoints=TrainingPoints%>%
   bind_cols(temp)%>%
   mutate(Deforestation=ifelse(Training.Class==1,1,0))%>%
@@ -99,7 +103,8 @@ TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
 #write_csv(TrainingPoints_PrimaryData,"TrainingPoints_PrimaryData.csv")
 
 #---------------
-# Create full list of Secondary Data # 
+# Create full list of Secondary Data #
+# This generates GoodeR_SecondaryData, so don't run it if you're importing that file
 #---------------
 ## Mask by loss extent to make smaller ##
 
@@ -144,8 +149,6 @@ GoodeR_SecondaryData=GoodeR_SecondaryData%>%
 GoodeR_SecondaryData=GoodeR_SecondaryData%>%
   filter(!is.na(Region))
 
-#-----
-# Don't run this.  Looks like a 'tool', not part of the model.
 #-----
 
 temp=raster(paste("./R_ModelInputs_SecondaryData/Goode_PopulationDifference20002015_10kMax1kMean.tif"))

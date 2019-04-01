@@ -21,15 +21,18 @@ setwd("E:/Forestry Model/Consolidated/")
 #---------------
 # Load input datasets #
 #---------------
-GoodeR_Boundaries_Region=read_csv("GoodeR_Boundaries_Region.csv")
-# GoodeR_SecondaryData can be calculated below, or imported here
-GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv", guess_max = 6000000)
-# TrainingPoints_PrimaryData can be calculated below, or imported here
-TrainingPoints_PrimaryData=read_csv("TrainingPoints_PrimaryData.csv", guess_max = 5000)
-GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-  filter(Loss_10kMean_20002016>0)
+# Required:
+GoodeR_Boundaries_Region=read_csv("GoodeR_Boundaries_Region.csv", guess_max = 600000)
 TrainingPoints = read_csv("TrainingPoints_19_full.csv")
 LossMaskFull= read_csv("LossMaskFull_20002016.csv", col_types = cols(Loss_10kMean_20002016 = col_number()))
+# Optional:
+# GoodeR_SecondaryData can be calculated below, or imported here
+GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv")
+GoodeR_SecondaryData=GoodeR_SecondaryData%>%
+  filter(Loss_10kMean_20002016>0)
+# TrainingPoints_PrimaryData can be calculated below, or imported here
+TrainingPoints_PrimaryData=read_csv("TrainingPoints_PrimaryData.csv")
+
 
 LossMask1pcnt=LossMaskFull%>%
   select(GoodeR.ID,Loss_10kMean_20002016)%>%
@@ -40,177 +43,193 @@ LossMask005=LossMaskFull%>%
   filter(as.numeric(Loss_10kMean_20002016)>=.005)%>%
   mutate(Loss_10kMean_20002016=replace(Loss_10kMean_20002016,,as.numeric(Loss_10kMean_20002016)))
 
+#---------------
+# Define functions - Broken, skip this.
+#---------------
+pause <- function() {
+  line <- readline(prompt="Press [enter] to continue")
+}
 
 #---------------
 # Create Training points with data #
-# This generates TrainingPoints_PrimaryData, so don't run it if you're importing that file
 #---------------
 
-# import primary data into big list #
-FileList=as.data.frame(list.files(path = "./R_ModelInputs_SecondaryData",
-                                  pattern = ".tif$", all.files = FALSE,
-                                  full.names = FALSE, recursive = FALSE,
-                                  ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE))
-names(FileList)=c("FileName")
-
-for(NAME in FileList$FileName){
-  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
+# If TrainingPoints_PrimaryData doesn't exist (wasn't imported above), compute it
+if (exists("TrainingPoints_PrimaryData") == FALSE) {
   
-  ifelse(nrow(data)!=1737,print(NAME),ifelse(ncol(data)!=4008,print(NAME),print("AllGood")))
-}
-
-
-temp=as.data.frame(c(1:nrow(TrainingPoints)))
-names(temp)=c("TrainingID")
-# Make columns for each driver (1 is that class, 0 is not that class)
-TrainingPoints=TrainingPoints%>%
-  bind_cols(temp)%>%
-  mutate(Deforestation=ifelse(Training.Class==1,1,0))%>%
-  mutate(Shifting.Agriculture=ifelse(Training.Class==2,1,0))%>%
-  mutate(TreeFarm.ForestryOther=ifelse(Training.Class==3,1,0))%>%
-  mutate(Wildfire=ifelse(Training.Class==4,1,0))%>%
-  mutate(Urban=ifelse(Training.Class==5,1,0))
-
-
-TrainingPoints_PrimaryData=TrainingPoints%>%
-  filter(Training.Class!=7)
-#write_csv(TrainingPoints,"TrainingPoints19.csv")
-
-for(NAME in FileList$FileName){
-  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
-  NAME2=NAME%>%
-    str_replace("^Goode_", "")%>%
-    str_replace(".tif$", "")
-  ## Select GRID data raster ##
-  data=data%>%
-    as.vector()%>%
-    as.data.frame()
-  names(data)=c(paste(NAME2))
-  ## create R.ID list ##
-  GoodeRList=1:6961896%>%
-    as.vector()%>%
-    as.data.frame()%>%
-    rename_("GoodeR.ID"=".")%>%
-    bind_cols(data)
+  # import primary data into big list #
+  FileList=as.data.frame(list.files(path = "./R_ModelInputs_SecondaryData",
+                                    pattern = ".tif$", all.files = FALSE,
+                                    full.names = FALSE, recursive = FALSE,
+                                    ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE))
+  names(FileList)=c("FileName")
+  
+  for(NAME in FileList$FileName){
+    data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
+    
+    ifelse(nrow(data)!=1737,print(NAME),ifelse(ncol(data)!=4008,print(NAME),print("AllGood")))
+  }
+  
+  
+  temp=as.data.frame(c(1:nrow(TrainingPoints)))
+  names(temp)=c("TrainingID")
+  # Make columns for each driver (1 is that class, 0 is not that class)
+  TrainingPoints=TrainingPoints%>%
+    bind_cols(temp)%>%
+    mutate(Deforestation=ifelse(Training.Class==1,1,0))%>%
+    mutate(Shifting.Agriculture=ifelse(Training.Class==2,1,0))%>%
+    mutate(TreeFarm.ForestryOther=ifelse(Training.Class==3,1,0))%>%
+    mutate(Wildfire=ifelse(Training.Class==4,1,0))%>%
+    mutate(Urban=ifelse(Training.Class==5,1,0))
+  
+  
+  TrainingPoints_PrimaryData=TrainingPoints%>%
+    filter(Training.Class!=7)
+  #activate this
+  #write_csv(TrainingPoints,"TrainingPoints19.csv")
+  
+  for(NAME in FileList$FileName){
+    data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
+    NAME2=NAME%>%
+      str_replace("^Goode_", "")%>%
+      str_replace(".tif$", "")
+    ## Select GRID data raster ##
+    data=data%>%
+      as.vector()%>%
+      as.data.frame()
+    names(data)=c(paste(NAME2))
+    ## create R.ID list ##
+    GoodeRList=1:6961896%>%
+      as.vector()%>%
+      as.data.frame()%>%
+      rename_("GoodeR.ID"=".")%>%
+      bind_cols(data)
+    TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
+      left_join(GoodeRList,by="GoodeR.ID")
+  }
+  TrainingPoints_PrimaryData[is.na(TrainingPoints_PrimaryData)]=0
   TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
-    left_join(GoodeRList,by="GoodeR.ID")
+    distinct()
+  
+  write_csv(TrainingPoints_PrimaryData,"TrainingPoints_PrimaryData.csv")
 }
-TrainingPoints_PrimaryData[is.na(TrainingPoints_PrimaryData)]=0
-TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
-  distinct()
-#----
-
-#write_csv(TrainingPoints_PrimaryData,"TrainingPoints_PrimaryData.csv")
 
 #---------------
 # Create full list of Secondary Data #
-# This generates GoodeR_SecondaryData, so don't run it if you're importing that file
 #---------------
 ## Mask by loss extent to make smaller ##
 
-GoodeR_SecondaryData=1:6961896%>%
-  as.vector()%>%
-  as.data.frame()%>%
-  rename_("GoodeR.ID"=".")%>%
-  inner_join(LossMaskFull,by="GoodeR.ID")%>%
-  filter(Loss_10kMean_20002016>0)%>%
-  select(-Loss_10kMean_20002016)
-temp=TrainingPoints_PrimaryData%>%
-  select(GoodeR.ID,TrainingID)
-GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-  left_join(temp,by="GoodeR.ID")
-GoodeR_SecondaryData$TrainingID[is.na(GoodeR_SecondaryData$TrainingID)]=0
+# If GoodeR_SecondaryData doesn't exist (wasn't imported above), compute it
+if (exists("GoodeR_SecondaryData") == FALSE) {
 
-for(NAME in FileList$FileName){
-  
-  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
-  
-  NAME2=NAME%>%
-    str_replace("^Goode_", "")%>%
-    str_replace(".tif$", "")
-  
-  ## Select GRID data raster ##
-  data=data%>%
-    as.vector()%>%
-    as.data.frame()
-  names(data)=c(paste(NAME2))
-  ## create R.ID list ##
-  GoodeRList=1:6961896%>%
+  GoodeR_SecondaryData=1:6961896%>%
     as.vector()%>%
     as.data.frame()%>%
     rename_("GoodeR.ID"=".")%>%
-    bind_cols(data)
+    inner_join(LossMaskFull,by="GoodeR.ID")%>%
+    filter(Loss_10kMean_20002016>0)%>%
+    select(-Loss_10kMean_20002016)
+  temp=TrainingPoints_PrimaryData%>%
+    select(GoodeR.ID,TrainingID)
   GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-    left_join(GoodeRList,by="GoodeR.ID")
+    left_join(temp,by="GoodeR.ID")
+  GoodeR_SecondaryData$TrainingID[is.na(GoodeR_SecondaryData$TrainingID)]=0
+  
+  for(NAME in FileList$FileName){
+    
+    data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
+    
+    NAME2=NAME%>%
+      str_replace("^Goode_", "")%>%
+      str_replace(".tif$", "")
+    
+    ## Select GRID data raster ##
+    data=data%>%
+      as.vector()%>%
+      as.data.frame()
+    names(data)=c(paste(NAME2))
+    ## create R.ID list ##
+    GoodeRList=1:6961896%>%
+      as.vector()%>%
+      as.data.frame()%>%
+      rename_("GoodeR.ID"=".")%>%
+      #look into different function
+      bind_cols(data)
+    GoodeR_SecondaryData=GoodeR_SecondaryData%>%
+      left_join(GoodeRList,by="GoodeR.ID")
+  }
+  GoodeR_SecondaryData[is.na(GoodeR_SecondaryData)]=0
+  GoodeR_SecondaryData=GoodeR_SecondaryData%>%
+    left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")
+  GoodeR_SecondaryData=GoodeR_SecondaryData%>%
+    filter(!is.na(Region))
+  
+  write_csv(GoodeR_SecondaryData, "./GoodeR_SecondaryData.csv")
 }
-GoodeR_SecondaryData[is.na(GoodeR_SecondaryData)]=0
-GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")
-GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-  filter(!is.na(Region))
-
-#-----
-
-temp=raster(paste("./R_ModelInputs_SecondaryData/Goode_PopulationDifference20002015_10kMax1kMean.tif"))
-data=temp%>%
-  as.vector()%>%
-  as.data.frame()
-names(data)=c("PopulationDifference20002015_10kMax1kMean")
-## create R.ID list ##
-GoodeRList=1:6961896%>%
-  as.vector()%>%
-  as.data.frame()%>%
-  rename_("GoodeR.ID"=".")%>%
-  bind_cols(data)
-
-TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
-  left_join(GoodeRList,by="GoodeR.ID")%>%
-  select(GoodeR.ID,TrainingID,
-         FireBrightness_80_10kMax_20002015,FireBrightness_80_10kMax1kMean_20002015,
-         FireBrightness_80_10kMax1kSum_20002015,FireBrightness_80_10kMean_20002015,
-         FireBrightness_80_10kMean1kMax_20002015,FireBrightness_80_10kMean1kSum_20002015,
-         FireBrightness_80_10kSum_20002015,FireCount_80_10kMax_20002015,
-         FireCount_80_10kMax1kMean_20002015,FireCount_80_10kMax1kSum_20002015,
-         FireCount_80_10kMean_20002015,FireCount_80_10kMean1kMax_20002015,
-         FireCount_80_10kMean1kSum_20002015,FireCount_80_10kSum_20002015,
-         FireFRP_80_10kMax_20002015,FireFRP_80_10kMax1kMean_20002015,
-         FireFRP_80_10kMax1kSum_230002015,FireFRP_80_10kMean_20002015,
-         FireFRP_80_10kMean1kMax_20002015,FireFRP_80_10kMean1kSum_20002015,
-         FireFRP_80_10kSum_20002015,FireLoss_10kMax_20002016,
-         FireLoss_10kMax1kMean_20002016,FireLoss_10kMax1kSum_20002016,
-         FireLoss_10kMean_20002016,FireLoss_10kMean1kMax_20002016,
-         FireLoss_10kMean1kSum_20002016,FireLoss_10kSum_20002016,
-         Gain_10kMax,Gain_10kMax1kMean,
-         Gain_10kMax1kSum,Gain_10kMean,
-         Gain_10kMean1kMax,Gain_10kMean1kSum,
-         Gain_10kSum,LandCover_DeciduousBroadleaf_3,
-         LandCover_EvergreenBroadleaf_2,LandCover_MixedOther_4,
-         LandCover_Needleleaf_1,Loss_10kMax_20002016,
-         Loss_10kMax1kMean_20002016,Loss_10kMax1kSum_20002016,
-         Loss_10kMean_20002016,Loss_10kMean1kMax_20002016,
-         Loss_10kMean1kSum_20002016,Loss_10kSum_20002016,
-         Loss_NetMean,LossYearDiff_10kMax_20002016,
-         LossYearDiff_10kMax1kMean_20002016,LossYearDiff_10kMax1kSum_20002016,
-         LossYearDiff_10kMean_20002016,LossYearDiff_10kMean1kMax_20002016,
-         LossYearDiff_10kMean1kSum_20002016,LossYearDiff_10kSum_20002016,
-         LossYearDiff1k_10kMax1kDiff_20002016,LossYearDiff1k_10kMean1kDiff_20002016,
-         LossYearDiff1k_10kSum1kDiff_20002016,Population2000_10kMax,
-         Population2000_10kMax1kMean,Population2000_10kMax1kSum,
-         Population2000_10kMean,Population2000_10kMean1kMax,
-         Population2000_10kMean1kSum,Population2000_10kSum,
-         Population2015_10kMax,Population2015_10kMax1kMean,
-         Population2015_10kMax1kSum,Population2015_10kMean,
-         Population2015_10kMean1kMax,Population2015_10kMean1kSum,
-         Population2015_10kSum,PopulationDifference20002015_10kMax,
-         PopulationDifference20002015_10kMax1kSum,PopulationDifference20002015_10kMean,
-         PopulationDifference20002015_10kMean1kMax,PopulationDifference20002015_10kMean1kSum,
-         PopulationDifference20002015_10kSum,PopulationDifference20002015_10kMax1kMean,TreeCover_10kMax,
-         TreeCover_10kMax1kMean,TreeCover_10kMax1kSum,TreeCover_10kMean,TreeCover_10kMean1kMax,TreeCover_10kMean1kSum,TreeCover_10kSum)
-
-names(TrainingPoints_PrimaryData)
-
-TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
-  select(-Region)
+#---------------
+# Old tool, do not run - This should be removed in a future version, after additional testing.
+#---------------
+# 
+# temp=raster(paste("./R_ModelInputs_SecondaryData/Goode_PopulationDifference20002015_10kMax1kMean.tif"))
+# data=temp%>%
+#   as.vector()%>%
+#   as.data.frame()
+# names(data)=c("PopulationDifference20002015_10kMax1kMean")
+# ## create R.ID list ##
+# GoodeRList=1:6961896%>%
+#   as.vector()%>%
+#   as.data.frame()%>%
+#   rename_("GoodeR.ID"=".")%>%
+#   bind_cols(data)
+# 
+# TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
+#   left_join(GoodeRList,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,TrainingID,
+#          FireBrightness_80_10kMax_20002015,FireBrightness_80_10kMax1kMean_20002015,
+#          FireBrightness_80_10kMax1kSum_20002015,FireBrightness_80_10kMean_20002015,
+#          FireBrightness_80_10kMean1kMax_20002015,FireBrightness_80_10kMean1kSum_20002015,
+#          FireBrightness_80_10kSum_20002015,FireCount_80_10kMax_20002015,
+#          FireCount_80_10kMax1kMean_20002015,FireCount_80_10kMax1kSum_20002015,
+#          FireCount_80_10kMean_20002015,FireCount_80_10kMean1kMax_20002015,
+#          FireCount_80_10kMean1kSum_20002015,FireCount_80_10kSum_20002015,
+#          FireFRP_80_10kMax_20002015,FireFRP_80_10kMax1kMean_20002015,
+#          FireFRP_80_10kMax1kSum_230002015,FireFRP_80_10kMean_20002015,
+#          FireFRP_80_10kMean1kMax_20002015,FireFRP_80_10kMean1kSum_20002015,
+#          FireFRP_80_10kSum_20002015,FireLoss_10kMax_20002016,
+#          FireLoss_10kMax1kMean_20002016,FireLoss_10kMax1kSum_20002016,
+#          FireLoss_10kMean_20002016,FireLoss_10kMean1kMax_20002016,
+#          FireLoss_10kMean1kSum_20002016,FireLoss_10kSum_20002016,
+#          Gain_10kMax,Gain_10kMax1kMean,
+#          Gain_10kMax1kSum,Gain_10kMean,
+#          Gain_10kMean1kMax,Gain_10kMean1kSum,
+#          Gain_10kSum,LandCover_DeciduousBroadleaf_3,
+#          LandCover_EvergreenBroadleaf_2,LandCover_MixedOther_4,
+#          LandCover_Needleleaf_1,Loss_10kMax_20002016,
+#          Loss_10kMax1kMean_20002016,Loss_10kMax1kSum_20002016,
+#          Loss_10kMean_20002016,Loss_10kMean1kMax_20002016,
+#          Loss_10kMean1kSum_20002016,Loss_10kSum_20002016,
+#          Loss_NetMean,LossYearDiff_10kMax_20002016,
+#          LossYearDiff_10kMax1kMean_20002016,LossYearDiff_10kMax1kSum_20002016,
+#          LossYearDiff_10kMean_20002016,LossYearDiff_10kMean1kMax_20002016,
+#          LossYearDiff_10kMean1kSum_20002016,LossYearDiff_10kSum_20002016,
+#          LossYearDiff1k_10kMax1kDiff_20002016,LossYearDiff1k_10kMean1kDiff_20002016,
+#          LossYearDiff1k_10kSum1kDiff_20002016,Population2000_10kMax,
+#          Population2000_10kMax1kMean,Population2000_10kMax1kSum,
+#          Population2000_10kMean,Population2000_10kMean1kMax,
+#          Population2000_10kMean1kSum,Population2000_10kSum,
+#          Population2015_10kMax,Population2015_10kMax1kMean,
+#          Population2015_10kMax1kSum,Population2015_10kMean,
+#          Population2015_10kMean1kMax,Population2015_10kMean1kSum,
+#          Population2015_10kSum,PopulationDifference20002015_10kMax,
+#          PopulationDifference20002015_10kMax1kSum,PopulationDifference20002015_10kMean,
+#          PopulationDifference20002015_10kMean1kMax,PopulationDifference20002015_10kMean1kSum,
+#          PopulationDifference20002015_10kSum,PopulationDifference20002015_10kMax1kMean,TreeCover_10kMax,
+#          TreeCover_10kMax1kMean,TreeCover_10kMax1kSum,TreeCover_10kMean,TreeCover_10kMean1kMax,TreeCover_10kMean1kSum,TreeCover_10kSum)
+# 
+# names(TrainingPoints_PrimaryData)
+# 
+# TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
+#   select(-Region)
 
 #write_csv(TrainingPoints_PrimaryData,"TrainingPoints_PrimaryData.csv")
 
@@ -247,6 +266,7 @@ fit=rpart(Deforestation~
             LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
             Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
             Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
+            # disable for all  but SE Asia?
             PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
             TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
           data=InputData, method="anova")
@@ -2067,7 +2087,7 @@ fit=rpart(Deforestation~
             Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
             Loss_NetMean+
             LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
+            LossYearDiff1k_10kMax1kDiff_20002016+LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
             Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
             Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
             PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
@@ -2982,6 +3002,13 @@ plot(r)
 
 writeRaster(r,filename="Goode_FinalClassification_19_Excludeduncertain.tif",type="GTIFF",overwrite=TRUE)
 
+
+#IMPORTANT
+#---------------
+#####   Run "Expand Final Classification" model, found in "Forestry Models 2.tbx".
+# This uses the Expand tool to classify uncertain pixels (model certainty < 50%) using nearest neighbor technique
+#---------------
+
 #-------------
 # Calculate % of loss classified (non-mixed/uncertain) #
 #-------------
@@ -3002,13 +3029,6 @@ LossUnClassified=sum(LossUnClassified$Loss_10kSum_20002016)/Total
 LossClassified
 LossUnClassified
 #-----
-
-
-#IMPORTANT
-#---------------
-#####   Run "Expand Final Classification" model, found in "Forestry Models 2.tbx".
-# This uses the Expand tool to classify uncertain pixels (model certainty < 50%) using nearest neighbor technique
-#---------------
 
 
 #-----------------------------------------
@@ -3037,12 +3057,13 @@ write_csv(Goode_FinalClassification19_Expand_05pcnt,"FinalClass_19_05pcnt.csv")
 
 #-----
 #--------------------------------------------------------
-# Generate Loss Masks for Final classifiacation (weight classification by loss)
+# Generate Loss Masks for Final classification (weight classification by loss)
 #--------------------------------------------------------
 
-FinalClass_19 = read_csv("./FinalClass_19_05pcnt.csv", col_types = cols(Class.Final = col_integer()))
+#FinalClass_19 = read_csv("./FinalClass_19_05pcnt.csv", col_types = cols(Class.Final = col_integer()))
+FinalClass_19 = Goode_FinalClassification19_Expand_05pcnt
 
-GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv")
+#GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv")
 
 LossData=GoodeR_SecondaryData%>%
   select(GoodeR.ID,Loss_10kMean_20002016)%>%

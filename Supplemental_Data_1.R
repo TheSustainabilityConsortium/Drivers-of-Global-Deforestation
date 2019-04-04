@@ -21,34 +21,46 @@ setwd("E:/Forestry Model/Consolidated/")
 #---------------
 # Load input datasets #
 #---------------
+
 # Required:
 GoodeR_Boundaries_Region=read_csv("GoodeR_Boundaries_Region.csv", guess_max = 600000)
 TrainingPoints = read_csv("TrainingPoints_19_full.csv")
 LossMaskFull= read_csv("LossMaskFull_20002016.csv", col_types = cols(Loss_10kMean_20002016 = col_number()))
+
 # Optional:
-# GoodeR_SecondaryData can be calculated below, or imported here
-GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv")
-GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-  filter(Loss_10kMean_20002016>0)
-# TrainingPoints_PrimaryData can be calculated below, or imported here
-TrainingPoints_PrimaryData=read_csv("TrainingPoints_PrimaryData.csv")
+# Look for GoodeR_SecondaryData in workspace.  Import or notify user it is missing.
+if (TRUE %in% (list.files() == 'GoodeR_SecondaryData__.csv')) {
+  GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv")
+  GoodeR_SecondaryData=GoodeR_SecondaryData%>%
+    filter(Loss_10kMean_20002016>0)
+} else {
+  print("Secondary Data not found in workspace.  It will be calculated.")
+}
 
+# Look for TrainingPoints_PrimaryData in workspace.  Import or notify user it is missing.
+if (TRUE %in% (list.files() == 'TrainingPoints_PrimaryData.csv')) {
+  TrainingPoints_PrimaryData=read_csv("TrainingPoints_PrimaryData.csv") 
+} else {
+  print("Training Points Primary Data not found in workspace.  It will be calculated.")
+}
 
-LossMask1pcnt=LossMaskFull%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>=.01)
-
-LossMask005=LossMaskFull%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(as.numeric(Loss_10kMean_20002016)>=.005)%>%
-  mutate(Loss_10kMean_20002016=replace(Loss_10kMean_20002016,,as.numeric(Loss_10kMean_20002016)))
+# These two objects are never used, so should be removed.
+#
+# LossMask1pcnt=LossMaskFull%>%
+#   select(GoodeR.ID,Loss_10kMean_20002016)%>%
+#   filter(Loss_10kMean_20002016>=.01)
+# 
+# LossMask005=LossMaskFull%>%
+#   select(GoodeR.ID,Loss_10kMean_20002016)%>%
+#   filter(as.numeric(Loss_10kMean_20002016)>=.005)%>%
+#   mutate(Loss_10kMean_20002016=replace(Loss_10kMean_20002016,,as.numeric(Loss_10kMean_20002016)))
 
 #---------------
 # Define functions - Broken, skip this.
 #---------------
-pause <- function() {
-  line <- readline(prompt="Press [enter] to continue")
-}
+# pause <- function() {
+#   line <- readline(prompt="Press [enter] to continue")
+# }
 
 #---------------
 # Create Training points with data #
@@ -2802,111 +2814,113 @@ ModelOutput.Final_All=ModelOutput.Final__1%>%
   bind_rows(ModelOutput.Final__6)%>%
   bind_rows(ModelOutput.Final__7)
 
+print("Writing raw model output to ModelOutput.Final_19.csv")
 
 write_csv(ModelOutput.Final_All,"ModelOutput.Final_19.csv")
 #------
 
 #-----------------------
-# mark decision trees and save #
+# mark decision trees and save - used for testing purposes.  Remove prior to release.
 #-----------------------
 
-Fit_Deforestation__1_19=Fit_Deforestation__1
-Fit_Deforestation__1_19=Fit_Deforestation__1
-Fit_Deforestation__2_19=Fit_Deforestation__2
-Fit_Deforestation__3_19=Fit_Deforestation__3
-Fit_Deforestation__4_19=Fit_Deforestation__4
-Fit_Deforestation__5_19=Fit_Deforestation__5
-Fit_Deforestation__6_19=Fit_Deforestation__6
-Fit_Deforestation__7_19=Fit_Deforestation__7
-
-Fit_Shifting.Agriculture__1_19=Fit_Shifting.Agriculture__1
-Fit_Shifting.Agriculture__1_19=Fit_Shifting.Agriculture__1
-Fit_Shifting.Agriculture__2_19=Fit_Shifting.Agriculture__2
-Fit_Shifting.Agriculture__3_19=Fit_Shifting.Agriculture__3
-Fit_Shifting.Agriculture__4_19=Fit_Shifting.Agriculture__4
-Fit_Shifting.Agriculture__5_19=Fit_Shifting.Agriculture__5
-Fit_Shifting.Agriculture__6_19=Fit_Shifting.Agriculture__6
-Fit_Shifting.Agriculture__7_19=Fit_Shifting.Agriculture__7
-
-Fit_TreeFarm.ForestryOther__1_19=Fit_TreeFarm.ForestryOther__1
-Fit_TreeFarm.ForestryOther__1_19=Fit_TreeFarm.ForestryOther__1
-Fit_TreeFarm.ForestryOther__2_19=Fit_TreeFarm.ForestryOther__2
-Fit_TreeFarm.ForestryOther__3_19=Fit_TreeFarm.ForestryOther__3
-Fit_TreeFarm.ForestryOther__4_19=Fit_TreeFarm.ForestryOther__4
-Fit_TreeFarm.ForestryOther__5_19=Fit_TreeFarm.ForestryOther__5
-Fit_TreeFarm.ForestryOther__6_19=Fit_TreeFarm.ForestryOther__6
-Fit_TreeFarm.ForestryOther__7_19=Fit_TreeFarm.ForestryOther__7
-
-Fit_Wildfire__1_19=Fit_Wildfire__1
-Fit_Wildfire__1_19=Fit_Wildfire__1
-Fit_Wildfire__2_19=Fit_Wildfire__2
-Fit_Wildfire__3_19=Fit_Wildfire__3
-Fit_Wildfire__4_19=Fit_Wildfire__4
-Fit_Wildfire__5_19=Fit_Wildfire__5
-Fit_Wildfire__6_19=Fit_Wildfire__6
-Fit_Wildfire__7_19=Fit_Wildfire__7
-
-Fit_Urban__1_19=Fit_Urban__1
-Fit_Urban__1_19=Fit_Urban__1
-Fit_Urban__2_19=Fit_Urban__2
-Fit_Urban__3_19=Fit_Urban__3
-Fit_Urban__4_19=Fit_Urban__4
-Fit_Urban__5_19=Fit_Urban__5
-Fit_Urban__6_19=Fit_Urban__6
-Fit_Urban__7_19=Fit_Urban__7
+# Fit_Deforestation__1_19=Fit_Deforestation__1
+# Fit_Deforestation__1_19=Fit_Deforestation__1
+# Fit_Deforestation__2_19=Fit_Deforestation__2
+# Fit_Deforestation__3_19=Fit_Deforestation__3
+# Fit_Deforestation__4_19=Fit_Deforestation__4
+# Fit_Deforestation__5_19=Fit_Deforestation__5
+# Fit_Deforestation__6_19=Fit_Deforestation__6
+# Fit_Deforestation__7_19=Fit_Deforestation__7
+# 
+# Fit_Shifting.Agriculture__1_19=Fit_Shifting.Agriculture__1
+# Fit_Shifting.Agriculture__1_19=Fit_Shifting.Agriculture__1
+# Fit_Shifting.Agriculture__2_19=Fit_Shifting.Agriculture__2
+# Fit_Shifting.Agriculture__3_19=Fit_Shifting.Agriculture__3
+# Fit_Shifting.Agriculture__4_19=Fit_Shifting.Agriculture__4
+# Fit_Shifting.Agriculture__5_19=Fit_Shifting.Agriculture__5
+# Fit_Shifting.Agriculture__6_19=Fit_Shifting.Agriculture__6
+# Fit_Shifting.Agriculture__7_19=Fit_Shifting.Agriculture__7
+# 
+# Fit_TreeFarm.ForestryOther__1_19=Fit_TreeFarm.ForestryOther__1
+# Fit_TreeFarm.ForestryOther__1_19=Fit_TreeFarm.ForestryOther__1
+# Fit_TreeFarm.ForestryOther__2_19=Fit_TreeFarm.ForestryOther__2
+# Fit_TreeFarm.ForestryOther__3_19=Fit_TreeFarm.ForestryOther__3
+# Fit_TreeFarm.ForestryOther__4_19=Fit_TreeFarm.ForestryOther__4
+# Fit_TreeFarm.ForestryOther__5_19=Fit_TreeFarm.ForestryOther__5
+# Fit_TreeFarm.ForestryOther__6_19=Fit_TreeFarm.ForestryOther__6
+# Fit_TreeFarm.ForestryOther__7_19=Fit_TreeFarm.ForestryOther__7
+# 
+# Fit_Wildfire__1_19=Fit_Wildfire__1
+# Fit_Wildfire__1_19=Fit_Wildfire__1
+# Fit_Wildfire__2_19=Fit_Wildfire__2
+# Fit_Wildfire__3_19=Fit_Wildfire__3
+# Fit_Wildfire__4_19=Fit_Wildfire__4
+# Fit_Wildfire__5_19=Fit_Wildfire__5
+# Fit_Wildfire__6_19=Fit_Wildfire__6
+# Fit_Wildfire__7_19=Fit_Wildfire__7
+# 
+# Fit_Urban__1_19=Fit_Urban__1
+# Fit_Urban__1_19=Fit_Urban__1
+# Fit_Urban__2_19=Fit_Urban__2
+# Fit_Urban__3_19=Fit_Urban__3
+# Fit_Urban__4_19=Fit_Urban__4
+# Fit_Urban__5_19=Fit_Urban__5
+# Fit_Urban__6_19=Fit_Urban__6
+# Fit_Urban__7_19=Fit_Urban__7
 #------
 
 #---------------
 # view decision tree Rplots
 #---------------
 
-fancyRpartPlot(Fit_Deforestation__1)
-fancyRpartPlot(Fit_Deforestation__2)
-fancyRpartPlot(Fit_Deforestation__3)
-fancyRpartPlot(Fit_Deforestation__4)
-fancyRpartPlot(Fit_Deforestation__5)
-fancyRpartPlot(Fit_Deforestation__6)
-fancyRpartPlot(Fit_Deforestation__7)
+fancyRpartPlot(Fit_Deforestation__1, main = "Deforestation 1")
+fancyRpartPlot(Fit_Deforestation__2, main = "Deforestation 2")
+fancyRpartPlot(Fit_Deforestation__3, main = "Deforestation 3")
+fancyRpartPlot(Fit_Deforestation__4, main = "Deforestation 4")
+fancyRpartPlot(Fit_Deforestation__5, main = "Deforestation 5")
+fancyRpartPlot(Fit_Deforestation__6, main = "Deforestation 6")
+fancyRpartPlot(Fit_Deforestation__7, main = "Deforestation 7")
 
-fancyRpartPlot(Fit_Deforestation2__1)
-fancyRpartPlot(Fit_Deforestation2__2)
-fancyRpartPlot(Fit_Deforestation2__3)
-fancyRpartPlot(Fit_Deforestation2__4)
-fancyRpartPlot(Fit_Deforestation2__5)
-fancyRpartPlot(Fit_Deforestation2__6)
-fancyRpartPlot(Fit_Deforestation2__7)
+fancyRpartPlot(Fit_Shifting.Agriculture__1, main = "Shifting Ag 1")
+fancyRpartPlot(Fit_Shifting.Agriculture__2, main = "Shifting Ag 2")
+fancyRpartPlot(Fit_Shifting.Agriculture__3, main = "Shifting Ag 3")
+fancyRpartPlot(Fit_Shifting.Agriculture__4, main = "Shifting Ag 4")
+fancyRpartPlot(Fit_Shifting.Agriculture__5, main = "Shifting Ag 5")
+fancyRpartPlot(Fit_Shifting.Agriculture__6, main = "Shifting Ag 6")
+fancyRpartPlot(Fit_Shifting.Agriculture__7, main = "Shifting Ag 7")
 
-fancyRpartPlot(Fit_Shifting.Agriculture__1)
-fancyRpartPlot(Fit_Shifting.Agriculture__2)
-fancyRpartPlot(Fit_Shifting.Agriculture__3)
-fancyRpartPlot(Fit_Shifting.Agriculture__4)
-fancyRpartPlot(Fit_Shifting.Agriculture__5)
-fancyRpartPlot(Fit_Shifting.Agriculture__6)
-fancyRpartPlot(Fit_Shifting.Agriculture__7)
+fancyRpartPlot(Fit_TreeFarm.ForestryOther__1, main = "Forestry 1")
+fancyRpartPlot(Fit_TreeFarm.ForestryOther__2, main = "Forestry 2")
+fancyRpartPlot(Fit_TreeFarm.ForestryOther__3, main = "Forestry 3")
+fancyRpartPlot(Fit_TreeFarm.ForestryOther__4, main = "Forestry 4")
+fancyRpartPlot(Fit_TreeFarm.ForestryOther__5, main = "Forestry 5")
+fancyRpartPlot(Fit_TreeFarm.ForestryOther__6, main = "Forestry 6")
+fancyRpartPlot(Fit_TreeFarm.ForestryOther__7, main = "Forestry 7")
 
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__1)
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__2)
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__3)
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__4)
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__5)
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__6)
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__7)
+fancyRpartPlot(Fit_Wildfire__1, main = "Wildfire 1")
+fancyRpartPlot(Fit_Wildfire__2, main = "Wildfire 2")
+fancyRpartPlot(Fit_Wildfire__3, main = "Wildfire 3")
+fancyRpartPlot(Fit_Wildfire__4, main = "Wildfire 4")
+fancyRpartPlot(Fit_Wildfire__5, main = "Wildfire 5")
+fancyRpartPlot(Fit_Wildfire__6, main = "Wildfire 6")
+fancyRpartPlot(Fit_Wildfire__7, main = "Wildfire 7")
 
-fancyRpartPlot(Fit_Wildfire__1)
-fancyRpartPlot(Fit_Wildfire__2)
-fancyRpartPlot(Fit_Wildfire__3)
-fancyRpartPlot(Fit_Wildfire__4)
-fancyRpartPlot(Fit_Wildfire__5)
-fancyRpartPlot(Fit_Wildfire__6)
-fancyRpartPlot(Fit_Wildfire__7)
+fancyRpartPlot(Fit_Urban__1, main = "Urban 1")
+fancyRpartPlot(Fit_Urban__2, main = "Urban 2")
+fancyRpartPlot(Fit_Urban__3, main = "Urban 3")
+fancyRpartPlot(Fit_Urban__4, main = "Urban 4")
+fancyRpartPlot(Fit_Urban__5, main = "Urban 5")
+fancyRpartPlot(Fit_Urban__6, main = "Urban 6")
+fancyRpartPlot(Fit_Urban__7, main = "Urban 7")
+
 #-----
 
 
 #---------------
-#Create final classification using model output
+#Create initial classification using model output
 #---------------
 
-ModelOutput.Final=read_csv("ModelOutput.Final_19.csv")
+#ModelOutput.Final=read_csv("ModelOutput.Final_19.csv")
 
 
 temp=ModelOutput.Final%>%
@@ -2938,15 +2952,16 @@ MaxClass_Final_19_50uncertain=ModelOutput.Final%>%
   select(-Class2)%>%
   select(-Loss_10kMean_20002016)
 
+print("Outputting initial class selections to MaxClass_Final_19_50uncertain.csv")
 
 write_csv(MaxClass_Final_19_50uncertain,"MaxClass_Final_19_50uncertain.csv")
 #----
 
 #--------------------------------------------------------
-# Final raster 
+# Initial raster 
 #--------------------------------------------------------
 
-MaxClass_Final_19_50uncertain=read_csv("MaxClass_Final_19_50uncertain.csv")
+#MaxClass_Final_19_50uncertain=read_csv("MaxClass_Final_19_50uncertain.csv")
 
 MaxClass_Final=MaxClass_Final_19_50uncertain%>%
   select(GoodeR.ID,Class)

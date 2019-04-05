@@ -1,6 +1,10 @@
 #---------------
 # Load packages #
 #---------------
+package.list <- c("rgdal", "raster", "dplyr", "foreign", "tidyr", "readr", "stringr",
+                  "rpart", "rpart.plot", "rattle")
+new.packages <- package.list[!(package.list %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
 library(rgdal)
 library(raster)
 library(dplyr)
@@ -8,7 +12,6 @@ library(foreign)
 library(tidyr)
 library(readr)
 library(stringr)
-library(tidyr)
 library(rpart)
 library(rpart.plot)
 library(rattle)
@@ -16,7 +19,8 @@ library(rattle)
 #---------------
 # Set workspace #
 #---------------
-setwd("E:/Forestry Model/Consolidated/")
+#setwd("E:/Forestry Model/Consolidated/")
+setwd("C:/TSC/Forestry Model test/")
 
 #---------------
 # Load input datasets #
@@ -56,11 +60,11 @@ if (TRUE %in% (list.files() == 'TrainingPoints_PrimaryData.csv')) {
 #   mutate(Loss_10kMean_20002016=replace(Loss_10kMean_20002016,,as.numeric(Loss_10kMean_20002016)))
 
 #---------------
-# Define functions - Broken, skip this.
+# Define functions
 #---------------
-# pause <- function() {
-#   line <- readline(prompt="Press [enter] to continue")
-# }
+pause <- function() {
+  line <- readline(prompt="Press [enter] to continue")
+}
 
 #---------------
 # Create Training points with data #
@@ -3020,9 +3024,9 @@ writeRaster(r,filename="Goode_FinalClassification_19_Excludeduncertain.tif",type
 
 #IMPORTANT
 #---------------
-#####   Run "Expand Final Classification" model, found in "Forestry Models 2.tbx".
-# This uses the Expand tool to classify uncertain pixels (model certainty < 50%) using nearest neighbor technique
-#---------------
+print("Run 'Expand Final Classification' model, found in 'Forestry Models 2.tbx'.")
+print("This uses the Expand tool to classify uncertain pixels (model certainty < 50%) using nearest neighbor technique")
+pause()
 
 #-------------
 # Calculate % of loss classified (non-mixed/uncertain) #

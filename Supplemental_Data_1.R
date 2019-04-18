@@ -4,9 +4,8 @@
 # Packages needed
 package.list <- c("rgdal", "raster", "dplyr", "foreign", "tidyr", "readr", "stringr",
                   "rpart", "rpart.plot", "rattle", "crayon")
-
+# If the packages aren't installed, install them
 new.packages <- package.list[!(package.list %in% installed.packages()[,"Package"])]
-# If the packages aren't isntalled, install them
 if(length(new.packages)) install.packages(new.packages)
 # Load the packages
 lapply(package.list, library, character.only = TRUE)
@@ -23,13 +22,37 @@ pause <- function() {
     invisible(readLines(file("stdin"), 1))
   }
 }
+
 # writes 'words' to terminal in green letters and makes a new line
 say <- function(words){
   cat(green(words),"\n")
 }
+
 # writes 'words' to the terminal in red letters and makes a new line
 bad <- function(words){
   cat(red(words),"\n")
+}
+
+# df is a dataframe with minimum of GoodeR.ID and 1 data column, filename and column are char strings
+rastOut <- function(df, filename, column) {
+  data=1:6961896%>%
+    as.data.frame()%>%
+    rename("GoodeR.ID"=".")%>%
+    left_join(df,by="GoodeR.ID")%>%
+    select(GoodeR.ID,column)
+  names(data)=c("GoodeR.ID","data")
+  list=data%>%
+    select(data)
+  list=as.vector(t(list))
+  m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+  m=(t(m))
+  r=raster(m)
+  xmin(r)=-20037506.5672
+  xmax(r)=20042493.4328
+  ymin(r)=-8695798.3918
+  ymax(r)=8674201.6082
+  crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"
+  writeRaster(r,filename=filename,type="GTIFF",overwrite=TRUE)
 }
 
 #---------------
@@ -51,9 +74,9 @@ LossMaskFull= read_csv("LossMaskFull_20002016.csv", col_types = cols(Loss_10kMea
 
 # Optional:
 # Look for GoodeR_SecondaryData in workspace.  Import or notify user it is missing.
-if (TRUE %in% (list.files() == 'GoodeR_SecondaryData__.csv')) {
+if (TRUE %in% (list.files() == 'GoodeR_SecondaryData.csv')) {
   say("Reading GoodeR_SecondaryData...")
-  GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv")
+  GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData.csv")
   GoodeR_SecondaryData=GoodeR_SecondaryData%>%
     filter(Loss_10kMean_20002016>0)
 } else {
@@ -67,17 +90,6 @@ if (TRUE %in% (list.files() == 'TrainingPoints_PrimaryData.csv')) {
 } else {
   say("Training Points Primary Data not found in workspace.  It will be calculated.")
 }
-
-# These two objects are never used, so should be removed.
-#
-# LossMask1pcnt=LossMaskFull%>%
-#   select(GoodeR.ID,Loss_10kMean_20002016)%>%
-#   filter(Loss_10kMean_20002016>=.01)
-# 
-# LossMask005=LossMaskFull%>%
-#   select(GoodeR.ID,Loss_10kMean_20002016)%>%
-#   filter(as.numeric(Loss_10kMean_20002016)>=.005)%>%
-#   mutate(Loss_10kMean_20002016=replace(Loss_10kMean_20002016,,as.numeric(Loss_10kMean_20002016)))
 
 #---------------
 # Create Training points with data #
@@ -224,89 +236,30 @@ if (exists("GoodeR_SecondaryData") == FALSE) {
   say("Writing GoodeR_SecondaryData.csv to working directory...")
   write_csv(GoodeR_SecondaryData, "./GoodeR_SecondaryData.csv")
 }
-#---------------
-# Old tool, do not run - This should be removed in a future version, after additional testing.
-#---------------
-# 
-# temp=raster(paste("./R_ModelInputs_SecondaryData/Goode_PopulationDifference20002015_10kMax1kMean.tif"))
-# data=temp%>%
-#   as.vector()%>%
-#   as.data.frame()
-# names(data)=c("PopulationDifference20002015_10kMax1kMean")
-# ## create R.ID list ##
-# GoodeRList=1:6961896%>%
-#   as.vector()%>%
-#   as.data.frame()%>%
-#   rename_("GoodeR.ID"=".")%>%
-#   bind_cols(data)
-# 
-# TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
-#   left_join(GoodeRList,by="GoodeR.ID")%>%
-#   select(GoodeR.ID,TrainingID,
-#          FireBrightness_80_10kMax_20002015,FireBrightness_80_10kMax1kMean_20002015,
-#          FireBrightness_80_10kMax1kSum_20002015,FireBrightness_80_10kMean_20002015,
-#          FireBrightness_80_10kMean1kMax_20002015,FireBrightness_80_10kMean1kSum_20002015,
-#          FireBrightness_80_10kSum_20002015,FireCount_80_10kMax_20002015,
-#          FireCount_80_10kMax1kMean_20002015,FireCount_80_10kMax1kSum_20002015,
-#          FireCount_80_10kMean_20002015,FireCount_80_10kMean1kMax_20002015,
-#          FireCount_80_10kMean1kSum_20002015,FireCount_80_10kSum_20002015,
-#          FireFRP_80_10kMax_20002015,FireFRP_80_10kMax1kMean_20002015,
-#          FireFRP_80_10kMax1kSum_230002015,FireFRP_80_10kMean_20002015,
-#          FireFRP_80_10kMean1kMax_20002015,FireFRP_80_10kMean1kSum_20002015,
-#          FireFRP_80_10kSum_20002015,FireLoss_10kMax_20002016,
-#          FireLoss_10kMax1kMean_20002016,FireLoss_10kMax1kSum_20002016,
-#          FireLoss_10kMean_20002016,FireLoss_10kMean1kMax_20002016,
-#          FireLoss_10kMean1kSum_20002016,FireLoss_10kSum_20002016,
-#          Gain_10kMax,Gain_10kMax1kMean,
-#          Gain_10kMax1kSum,Gain_10kMean,
-#          Gain_10kMean1kMax,Gain_10kMean1kSum,
-#          Gain_10kSum,LandCover_DeciduousBroadleaf_3,
-#          LandCover_EvergreenBroadleaf_2,LandCover_MixedOther_4,
-#          LandCover_Needleleaf_1,Loss_10kMax_20002016,
-#          Loss_10kMax1kMean_20002016,Loss_10kMax1kSum_20002016,
-#          Loss_10kMean_20002016,Loss_10kMean1kMax_20002016,
-#          Loss_10kMean1kSum_20002016,Loss_10kSum_20002016,
-#          Loss_NetMean,LossYearDiff_10kMax_20002016,
-#          LossYearDiff_10kMax1kMean_20002016,LossYearDiff_10kMax1kSum_20002016,
-#          LossYearDiff_10kMean_20002016,LossYearDiff_10kMean1kMax_20002016,
-#          LossYearDiff_10kMean1kSum_20002016,LossYearDiff_10kSum_20002016,
-#          LossYearDiff1k_10kMax1kDiff_20002016,LossYearDiff1k_10kMean1kDiff_20002016,
-#          LossYearDiff1k_10kSum1kDiff_20002016,Population2000_10kMax,
-#          Population2000_10kMax1kMean,Population2000_10kMax1kSum,
-#          Population2000_10kMean,Population2000_10kMean1kMax,
-#          Population2000_10kMean1kSum,Population2000_10kSum,
-#          Population2015_10kMax,Population2015_10kMax1kMean,
-#          Population2015_10kMax1kSum,Population2015_10kMean,
-#          Population2015_10kMean1kMax,Population2015_10kMean1kSum,
-#          Population2015_10kSum,PopulationDifference20002015_10kMax,
-#          PopulationDifference20002015_10kMax1kSum,PopulationDifference20002015_10kMean,
-#          PopulationDifference20002015_10kMean1kMax,PopulationDifference20002015_10kMean1kSum,
-#          PopulationDifference20002015_10kSum,PopulationDifference20002015_10kMax1kMean,TreeCover_10kMax,
-#          TreeCover_10kMax1kMean,TreeCover_10kMax1kSum,TreeCover_10kMean,TreeCover_10kMean1kMax,TreeCover_10kMean1kSum,TreeCover_10kSum)
-# 
-# names(TrainingPoints_PrimaryData)
-# 
-# TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
-#   select(-Region)
-
-#write_csv(TrainingPoints_PrimaryData,"TrainingPoints_PrimaryData.csv")
+#----
 
 #-----------------------
 ## Create Rpart Fits ##
 #-----------------------
 
 regions <- c(1, 2, 3, 4, 5, 6, 7)
-drivers <- c(1, 2, 3, 4, 5)
+drivers <- c("Output_Deforestation", "Output_Shifting.Agriculture", "Output_TreeFarm.ForestryOther", "Output_Wildfire", "Output_Urban")
 
 #----------------------------------------------------------------------------------------
 #Region 1
 #----------------------------------------------------------------------------------------
-say("Setting up Region 1")
+say("")
+say("********************")
+say("* Setting up Region 1")
+say("********************")
 
 TrainingPoints_PrimaryData__1=TrainingPoints_PrimaryData%>%
   left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
   mutate(Region=replace(Region,,as.numeric(Region)))%>%
   filter(Region==1)
+
+driver <- 1
+region <- 1
 
 #-----------------------
 #Deforestation__1#
@@ -330,7 +283,6 @@ fit=rpart(Deforestation~
             LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
             Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
             Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            # disable for all  but SE Asia?
             PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
             TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
           data=InputData, method="anova")
@@ -348,30 +300,7 @@ ModelOutput=GoodeR_SecondaryData%>%
 
 ModelOutput.Final=ModelOutput
 
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Deforestation__1.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__1.tiff",drivers[driver])
 
 #---------------
 
@@ -379,6 +308,8 @@ writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Deforestation__1.tif
 #Shifting.Agriculture__1#
 #-----------------------
 say("Calculating Shifting Ag Tree...")
+
+driver <- driver + 1
 
 InputData=select(TrainingPoints_PrimaryData__1,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Shifting.Agriculture~
@@ -416,35 +347,7 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__1.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__1.tiff",drivers[driver])
 
 #---------------
 
@@ -452,6 +355,8 @@ writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture
 #TreeFarm.ForestryOther__1#
 #-----------------------
 say("Calculating Forestry Tree...")
+
+driver <- driver + 1
 
 InputData=select(TrainingPoints_PrimaryData__1,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(TreeFarm.ForestryOther~
@@ -489,35 +394,7 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__1.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__1.tiff",drivers[driver])
 
 #---------------
 
@@ -525,6 +402,8 @@ writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOth
 #Wildfire__1#
 #-----------------------
 say("Calculating Wildfire Tree...")
+
+driver <- driver + 1
 
 InputData=select(TrainingPoints_PrimaryData__1,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Wildfire~
@@ -563,35 +442,7 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Wildfire)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Wildfire)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Wildfire__1.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__1.tiff",drivers[driver])
 
 #---------------
 
@@ -599,6 +450,8 @@ writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Wildfire__1.tiff",ty
 #Urban__1#
 #-----------------------
 say("Calculating Urban Tree...")
+
+driver <- driver + 1
 
 InputData=select(TrainingPoints_PrimaryData__1,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Urban~
@@ -637,52 +490,33 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Urban)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Urban)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Urban__1.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__1.tiff",drivers[driver])
 
 #---------------
-say("Completing Region 1...")
 
 ModelOutput.Final__1=ModelOutput.Final%>%
   select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
+
+say("* Region 1 Complete!")
+say("********************")
 
 #-------------------------------------------------------------------
 
 #----------------------------------------------------------------------------------------
 #Region__2
 #----------------------------------------------------------------------------------------
-say("Setting up Region 2...")
+say("")
+say("********************")
+say("* Setting up Region 2...")
+say("********************")
+
 TrainingPoints_PrimaryData__2=TrainingPoints_PrimaryData%>%
   left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
   mutate(Region=replace(Region,,as.numeric(Region)))%>%
   filter(Region==2)
+
+driver <- 1
+region <- region + 1
 
 #-----------------------
 #Deforestation__2#
@@ -723,30 +557,7 @@ ModelOutput=GoodeR_SecondaryData%>%
 
 ModelOutput.Final=ModelOutput
 
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Deforestation__2.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__2.tiff",drivers[driver])
 
 #---------------
 
@@ -754,6 +565,8 @@ writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Deforestation__2.tif
 #Shifting.Agriculture__2#
 #-----------------------
 say("Calculating Shifting Ag Tree...")
+
+driver <- driver + 1
 
 InputData=select(TrainingPoints_PrimaryData__2,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Shifting.Agriculture~
@@ -791,35 +604,7 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__2.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__2.tiff",drivers[driver])
 
 #---------------
 
@@ -827,6 +612,8 @@ writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture
 #TreeFarm.ForestryOther__2#
 #-----------------------
 say("Calculating Forestry Tree...")
+
+driver <- driver + 1
 
 InputData=select(TrainingPoints_PrimaryData__2,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(TreeFarm.ForestryOther~
@@ -864,35 +651,7 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__2.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__2.tiff",drivers[driver])
 
 #---------------
 
@@ -938,35 +697,7 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Wildfire)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Wildfire)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Wildfire__2.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__2.tiff",drivers[driver])
 
 #---------------
 
@@ -974,6 +705,8 @@ writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Wildfire__2.tiff",ty
 #Urban__2#
 #-----------------------
 say("Calculating Urban Tree...")
+
+driver <- driver + 1
 
 InputData=select(TrainingPoints_PrimaryData__2,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Urban~
@@ -1012,40 +745,14 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Urban)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Urban)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Urban__2.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__2.tiff",drivers[driver])
 
 #---------------
-say("Completing Region 2...")
+
 ModelOutput.Final__2=ModelOutput.Final%>%
   select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
+say("* Region 2 Complete!")
+say("********************")
 
 #-------
 
@@ -1054,11 +761,18 @@ ModelOutput.Final__2=ModelOutput.Final%>%
 #----------------------------------------------------------------------------------------
 #Region__3
 #----------------------------------------------------------------------------------------
-say("Setting Up Region 3...")
+say("")
+say("********************")
+say("* Setting Up Region 3...")
+say("********************")
+
 TrainingPoints_PrimaryData__3=TrainingPoints_PrimaryData%>%
   left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
   mutate(Region=replace(Region,,as.numeric(Region)))%>%
   filter(Region==3)
+
+driver <- 1
+region <- region + 1
 
 #-----------------------
 #Deforestation__3#
@@ -1099,30 +813,7 @@ ModelOutput=GoodeR_SecondaryData%>%
 
 ModelOutput.Final=ModelOutput
 
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Deforestation__3.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__3.tiff",drivers[driver])
 
 #---------------
 
@@ -1130,6 +821,9 @@ writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Deforestation__3.tif
 #Shifting.Agriculture__3#
 #-----------------------
 say("Calculating Shifting Ag Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__3,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Shifting.Agriculture~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1166,35 +860,7 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__3.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__3.tiff",drivers[driver])
 
 #---------------
 
@@ -1202,6 +868,9 @@ writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture
 #TreeFarm.ForestryOther__3#
 #-----------------------
 say("Calculating Forestry Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__3,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(TreeFarm.ForestryOther~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1238,35 +907,7 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__3.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__3.tiff",drivers[driver])
 
 #---------------
 
@@ -1274,6 +915,9 @@ writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOth
 #Wildfire__3#
 #-----------------------
 say("Calculating Wildfire Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__3,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Wildfire~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1311,41 +955,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Wildfire)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Wildfire)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Wildfire__3.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__3.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Urban__3#
 #-----------------------
+say("Calculating Urban Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__3,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Urban~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1383,38 +1003,12 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Urban)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Urban)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Urban__3.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__3.tiff", drivers[driver])
 
 #---------------
-say("Completing Region 3...")
+say("* Region 3 Complete!")
+say("********************")
+
 ModelOutput.Final__3=ModelOutput.Final%>%
   select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
 
@@ -1424,16 +1018,24 @@ ModelOutput.Final__3=ModelOutput.Final%>%
 #----------------------------------------------------------------------------------------
 #Region__4
 #----------------------------------------------------------------------------------------
-say("Setting up Region 4...")
+say("")
+say("********************")
+say("* Setting up Region 4...")
+say("********************")
 
 TrainingPoints_PrimaryData__4=TrainingPoints_PrimaryData%>%
   left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
   mutate(Region=replace(Region,,as.numeric(Region)))%>%
   filter(Region==4)
 
+driver <- 1
+region <- region + 1
+
 #-----------------------
 #Deforestation__4#
 #-----------------------
+say("Calculating Deforestation Tree...")
+
 InputData=select(TrainingPoints_PrimaryData__4,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Deforestation~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1468,36 +1070,17 @@ ModelOutput=GoodeR_SecondaryData%>%
 
 ModelOutput.Final=ModelOutput
 
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Deforestation__4.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__4.tiff", drivers[driver])
 
 #---------------
 
 #-----------------------
 #Shifting.Agriculture__4#
 #-----------------------
+say("Calculating Shifting Ag Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__4,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Shifting.Agriculture~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1534,41 +1117,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__4.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__4.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #TreeFarm.ForestryOther__4#
 #-----------------------
+say("Calculating Forestry Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__4,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(TreeFarm.ForestryOther~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1605,41 +1164,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__4.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__4.tiff", drivers[driver])
 
 #---------------
 
 #-----------------------
 #Wildfire__4#
 #-----------------------
+say("Calculating Wildfire Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__4,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Wildfire~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1677,41 +1212,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Wildfire)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Wildfire)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Wildfire__4.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__4.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Urban__4#
 #-----------------------
+say("Calculating Urban Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__4,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Urban~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1749,38 +1260,11 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Urban)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Urban)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Urban__4.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__4.tiff",drivers[driver])
 
 #---------------
-say("Finishing Region 4...")
+say("* Region 4 Complete!")
+say("********************")
 
 ModelOutput.Final__4=ModelOutput.Final%>%
   select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
@@ -1790,16 +1274,24 @@ ModelOutput.Final__4=ModelOutput.Final%>%
 #----------------------------------------------------------------------------------------
 #Region__5
 #----------------------------------------------------------------------------------------
-say("Setting up Region 5")
+say("")
+say("********************")
+say("* Setting up Region 5...")
+say("********************")
 
 TrainingPoints_PrimaryData__5=TrainingPoints_PrimaryData%>%
   left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
   mutate(Region=replace(Region,,as.numeric(Region)))%>%
   filter(Region==5)
 
+driver <- 1
+region <- region + 1
+
 #-----------------------
 #Deforestation__5#
 #-----------------------
+say("Calculating Deforestation Tree...")
+
 InputData=select(TrainingPoints_PrimaryData__5,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Deforestation~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1834,36 +1326,17 @@ ModelOutput=GoodeR_SecondaryData%>%
 
 ModelOutput.Final=ModelOutput
 
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Deforestation__5.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__5.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Shifting.Agriculture__5#
 #-----------------------
+say("Calculating Shifting Ag Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__5,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Shifting.Agriculture~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1900,41 +1373,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__5.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__5.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #TreeFarm.ForestryOther__5#
 #-----------------------
+say("Calculating Forestry Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__5,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(TreeFarm.ForestryOther~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -1971,41 +1420,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__5.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__5.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Wildfire__5#
 #-----------------------
+say("Calculating Wildfire Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__5,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Wildfire~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2043,41 +1468,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Wildfire)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Wildfire)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Wildfire__5.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__5.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Urban__5#
 #-----------------------
+say("Calculating Urban Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__5,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Urban~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2115,38 +1516,11 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Urban)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Urban)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Urban__5.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__5.tiff",drivers[driver])
 
 #---------------
-say("Completing Region 5...")
+say("* Region 5 Complete!")
+say("********************")
 
 ModelOutput.Final__5=ModelOutput.Final%>%
   select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
@@ -2156,16 +1530,24 @@ ModelOutput.Final__5=ModelOutput.Final%>%
 #----------------------------------------------------------------------------------------
 #Region__6
 #----------------------------------------------------------------------------------------
-say("Setting up Region 6...")
+say("")
+say("********************")
+say("* Setting up Region 6...")
+say("********************")
 
 TrainingPoints_PrimaryData__6=TrainingPoints_PrimaryData%>%
   left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
   mutate(Region=replace(Region,,as.numeric(Region)))%>%
   filter(Region==6)
 
+driver <- 1
+region <- region + 1
+
 #-----------------------
 #Deforestation__6#
 #-----------------------
+say("Calculating Deforestation Tree...")
+
 InputData=select(TrainingPoints_PrimaryData__6,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Deforestation~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2200,36 +1582,17 @@ ModelOutput=GoodeR_SecondaryData%>%
 
 ModelOutput.Final=ModelOutput
 
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Deforestation__6.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__6.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Shifting.Agriculture__6#
 #-----------------------
+say("Calculating Shifting Ag Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__6,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Shifting.Agriculture~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2266,41 +1629,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__6.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__6.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #TreeFarm.ForestryOther__6#
 #-----------------------
+say("Calculating Forestry Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__6,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(TreeFarm.ForestryOther~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2337,41 +1676,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__6.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__6.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Wildfire__6#
 #-----------------------
+say("Calculating Wildfire Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__6,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Wildfire~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2409,41 +1724,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Wildfire)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Wildfire)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Wildfire__6.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__6.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Urban__6#
 #-----------------------
+say("Calculating Urban Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__6,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Urban~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2481,38 +1772,11 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Urban)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Urban)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Urban__6.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__6.tiff",drivers[driver])
 
 #---------------
-say("Completing Region 6...")
+say("* Region 6 Complete!")
+say("********************")
 
 ModelOutput.Final__6=ModelOutput.Final%>%
   select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
@@ -2523,16 +1787,24 @@ ModelOutput.Final__6=ModelOutput.Final%>%
 #----------------------------------------------------------------------------------------
 #Region__7
 #----------------------------------------------------------------------------------------
-say("Setting up Region 7...")
+say("")
+say("********************")
+say("* Setting up Region 7...")
+say("********************")
 
 TrainingPoints_PrimaryData__7=TrainingPoints_PrimaryData%>%
   left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
   mutate(Region=replace(Region,,as.numeric(Region)))%>%
   filter(Region==7)
 
+driver <- 1
+region <- region + 1
+
 #-----------------------
 #Deforestation__7#
 #-----------------------
+say("Calculating Deforestation Tree...")
+
 InputData=select(TrainingPoints_PrimaryData__7,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Deforestation~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2567,36 +1839,17 @@ ModelOutput=GoodeR_SecondaryData%>%
 
 ModelOutput.Final=ModelOutput
 
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Deforestation__7.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__7.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Shifting.Agriculture__7#
 #-----------------------
+say("Calculating Shifting Ag Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__7,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Shifting.Agriculture~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2633,41 +1886,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Shifting.Agriculture)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__7.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__7.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #TreeFarm.ForestryOther__7#
 #-----------------------
+say("Calculating Forestry Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__7,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(TreeFarm.ForestryOther~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2704,41 +1933,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_TreeFarm.ForestryOther)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__7.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__7.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Wildfire__7#
 #-----------------------
+say("Calculating Wildfire Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__7,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Wildfire~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2776,41 +1981,17 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Wildfire)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Wildfire)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Wildfire__7.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__7.tiff",drivers[driver])
 
 #---------------
 
 #-----------------------
 #Urban__7#
 #-----------------------
+say("Calculating Urban Tree...")
+
+driver <- driver + 1
+
 InputData=select(TrainingPoints_PrimaryData__7,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
 fit=rpart(Urban~
             FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
@@ -2848,38 +2029,12 @@ ModelOutput.Final=ModelOutput.Final%>%
   distinct()%>%
   left_join(ModelOutput,by="GoodeR.ID")
 
-temp2=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  filter(Loss_10kMean_20002016>0)
-temp=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Urban)%>%
-  inner_join(temp2,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Output_Urban)
-names(temp)=c("GoodeR.ID","data")
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(temp,by="GoodeR.ID")%>%
-  select(GoodeR.ID,data)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-
-writeRaster(r,filename="Temp_RModelOutputsTiffs/TEST_Output_Urban__7.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__7.tiff",drivers[driver])
 
 #---------------
-say("Completing Region 7...")
+say("* Region 7 Complete!")
+say("********************")
+say("")
 
 ModelOutput.Final__7=ModelOutput.Final%>%
   select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
@@ -2902,56 +2057,6 @@ ModelOutput.Final_All=ModelOutput.Final__1%>%
 say("Writing raw model output to ModelOutput.Final_19.csv")
 
 write_csv(ModelOutput.Final_All,"ModelOutput.Final_19.csv")
-#------
-
-#-----------------------
-# mark decision trees and save - used for testing purposes.  Remove prior to release.
-#-----------------------
-
-# Fit_Deforestation__1_19=Fit_Deforestation__1
-# Fit_Deforestation__1_19=Fit_Deforestation__1
-# Fit_Deforestation__2_19=Fit_Deforestation__2
-# Fit_Deforestation__3_19=Fit_Deforestation__3
-# Fit_Deforestation__4_19=Fit_Deforestation__4
-# Fit_Deforestation__5_19=Fit_Deforestation__5
-# Fit_Deforestation__6_19=Fit_Deforestation__6
-# Fit_Deforestation__7_19=Fit_Deforestation__7
-# 
-# Fit_Shifting.Agriculture__1_19=Fit_Shifting.Agriculture__1
-# Fit_Shifting.Agriculture__1_19=Fit_Shifting.Agriculture__1
-# Fit_Shifting.Agriculture__2_19=Fit_Shifting.Agriculture__2
-# Fit_Shifting.Agriculture__3_19=Fit_Shifting.Agriculture__3
-# Fit_Shifting.Agriculture__4_19=Fit_Shifting.Agriculture__4
-# Fit_Shifting.Agriculture__5_19=Fit_Shifting.Agriculture__5
-# Fit_Shifting.Agriculture__6_19=Fit_Shifting.Agriculture__6
-# Fit_Shifting.Agriculture__7_19=Fit_Shifting.Agriculture__7
-# 
-# Fit_TreeFarm.ForestryOther__1_19=Fit_TreeFarm.ForestryOther__1
-# Fit_TreeFarm.ForestryOther__1_19=Fit_TreeFarm.ForestryOther__1
-# Fit_TreeFarm.ForestryOther__2_19=Fit_TreeFarm.ForestryOther__2
-# Fit_TreeFarm.ForestryOther__3_19=Fit_TreeFarm.ForestryOther__3
-# Fit_TreeFarm.ForestryOther__4_19=Fit_TreeFarm.ForestryOther__4
-# Fit_TreeFarm.ForestryOther__5_19=Fit_TreeFarm.ForestryOther__5
-# Fit_TreeFarm.ForestryOther__6_19=Fit_TreeFarm.ForestryOther__6
-# Fit_TreeFarm.ForestryOther__7_19=Fit_TreeFarm.ForestryOther__7
-# 
-# Fit_Wildfire__1_19=Fit_Wildfire__1
-# Fit_Wildfire__1_19=Fit_Wildfire__1
-# Fit_Wildfire__2_19=Fit_Wildfire__2
-# Fit_Wildfire__3_19=Fit_Wildfire__3
-# Fit_Wildfire__4_19=Fit_Wildfire__4
-# Fit_Wildfire__5_19=Fit_Wildfire__5
-# Fit_Wildfire__6_19=Fit_Wildfire__6
-# Fit_Wildfire__7_19=Fit_Wildfire__7
-# 
-# Fit_Urban__1_19=Fit_Urban__1
-# Fit_Urban__1_19=Fit_Urban__1
-# Fit_Urban__2_19=Fit_Urban__2
-# Fit_Urban__3_19=Fit_Urban__3
-# Fit_Urban__4_19=Fit_Urban__4
-# Fit_Urban__5_19=Fit_Urban__5
-# Fit_Urban__6_19=Fit_Urban__6
-# Fit_Urban__7_19=Fit_Urban__7
 #------
 
 #---------------
@@ -3006,9 +2111,9 @@ fancyRpartPlot(Fit_Urban__7, main = "Urban 7")
 #---------------
 
 #ModelOutput.Final=read_csv("ModelOutput.Final_19.csv")
-say("Trees are voting on each pixel...")
+say("Trees are voting on each pixel (this takes a while; it may be a good time to go get some coffee)...")
 
-temp=ModelOutput.Final%>%
+temp=ModelOutput.Final_All%>%
   select(Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
 test=as.data.frame(colnames(temp)[apply(temp,1,which.max)])
 names(test)=c("MaxClass")
@@ -3027,7 +2132,7 @@ MaxClass=MaxClass%>%
                                            ifelse(MaxClass=="Output_Wildfire",4,
                                                   ifelse(MaxClass=="Output_Urban",5,0)
                                            ))))))
-MaxClass_Final_19_50uncertain=ModelOutput.Final%>%
+MaxClass_Final_19_50uncertain=ModelOutput.Final_All%>%
   select(GoodeR.ID)%>%
   bind_cols(MaxClass)%>%
   left_join(LossMaskFull,by = "GoodeR.ID")%>%
@@ -3107,6 +2212,8 @@ writeRaster(r,filename="Goode_FinalClassification_19_Excludeduncertain.tif",type
 
 #IMPORTANT
 #---------------
+say("")
+say("**************************************************************************")
 say("The model is now paused.")
 say("Run 'Expand Final Classification' model, found in 'Forestry Models 2.tbx'.")
 say("This uses the Expand tool to classify uncertain pixels (model certainty < 50%) using nearest neighbor technique")
@@ -3157,6 +2264,7 @@ temp=RasterList%>%
   select(-Class,Class2,-Loss_10kMean_20002016)
 
 Goode_FinalClassification19_Expand_05pcnt=temp
+writeRaster(Goode_FinalClassification19_Expand_05pcnt, filename = "R_FinalOutputs/TestMask.tif", type="GTIFF", overwrite = TRUE)
 
 write_csv(Goode_FinalClassification19_Expand_05pcnt,"FinalClass_19_05pcnt.csv")
 
@@ -3168,7 +2276,7 @@ write_csv(Goode_FinalClassification19_Expand_05pcnt,"FinalClass_19_05pcnt.csv")
 #FinalClass_19 = read_csv("./FinalClass_19_05pcnt.csv", col_types = cols(Class.Final = col_integer()))
 FinalClass_19 = Goode_FinalClassification19_Expand_05pcnt
 
-#GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData__.csv")
+GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData.csv")
 
 LossData=GoodeR_SecondaryData%>%
   select(GoodeR.ID,Loss_10kMean_20002016)%>%
@@ -3370,194 +2478,194 @@ plot(r)
 writeRaster(r,filename="Goode_LossMask_19_MinorLoss_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
 #----
 
-#--------------------------------------------------------
-#separate output by region
-#--------------------------------------------------------
-
-data=raster("Goode_Boundaries_Region.tif")
-
-## Select GRID data raster ##
-data=data%>%
-  as.vector()%>%
-  as.data.frame()
-
-names(data)=c("Region")
-## create R.ID list ##
-GoodeR_Boundaries_Region=1:6961896%>%
-  as.vector()%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  bind_cols(data)
-#write_csv(GoodeR_Boundaries_Region,"GoodeR_Boundaries_Region.csv")
-
-FinalClass_19=read_csv("FinalClass_19_05pcnt.csv", col_types = cols(Class.Final = col_number()))
-
-#---------------------
-# add strata field #
-#---------------------
-
-MaxClass_Final=FinalClass_19%>%
-  filter(!is.na(Class.Final))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  mutate(Strata=Class.Final*10+Region)
-
-StrataCount=MaxClass_Final%>%
-  mutate(Strata.Name=as.character(round(Strata,0)))%>%
-  group_by(Strata.Name)%>%
-  summarize(Count=n())%>%
-  filter(Strata.Name!="1",Strata.Name!="2",Strata.Name!="3",Strata.Name!="4",Strata.Name!="5",Strata.Name!="6",Strata.Name!="7")
-sum=sum(StrataCount$Count)
-
-#---------------------
-# experiment with sampling size (how many cells will be required?) #
-#---------------------
-
-StrataCount=StrataCount%>%
-  ungroup()%>%
-  mutate(Count.pcnt=Count/sum)%>%
-  mutate(num=round(Count.pcnt*750,0))%>%
-  mutate(num30=ifelse(Count<30,Count,ifelse(num<30,30,num)))%>%
-  mutate(num40=ifelse(Count<40,Count,ifelse(num<40,40,num)))%>%
-  mutate(num50=ifelse(Count<50,Count,ifelse(num<50,50,num)))
-
-num=sum(StrataCount$num)
-num30=sum(StrataCount$num30)
-num40=sum(StrataCount$num40)
-num50=sum(StrataCount$num50)
-
-temp=MaxClass_Final%>%
-  select(-GoodeR.ID)%>%
-  distinct()%>%
-  mutate(Strata.Name=as.character(Strata))
-
-StrataCount=StrataCount%>%
-  left_join(temp,by="Strata.Name")%>%
-  select(Strata.Name,Region,Class.Final,num40,Count)
-
-
-write_csv(StrataCount,"StrataCount_19.csv")
-
-#---------------------
-# Strata Raster export
-#---------------------
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(MaxClass_Final,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Strata)%>%
-  distinct()
-names(data)=c("GoodeR.ID","data")
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-writeRaster(r,filename="Goode_Strata_All_19.tiff",type="GTIFF",overwrite=TRUE)
-#----
-
-
-#---------------------
-# Strata Sampling by region
-#---------------------
-temp=StrataCount
-sum(temp$num40)
-
-StrataName=StrataCount%>%
-  select(Strata.Name)
-
-Strata.Sample.Final=data.frame()
-
-for(Strata.ID in StrataName$Strata.Name){
-  
-  Num=StrataCount%>%
-    filter(Strata.Name==Strata.ID)%>%
-    inner_join(StrataName,by="Strata.Name")%>%
-    select(num40)
-  Num=as.numeric(Num)
-  
-  Strata=MaxClass_Final%>%
-    filter(Strata==Strata.ID)%>%
-    select(GoodeR.ID)
-  Strata=as.vector(Strata)
-  
-  Sample=sample_n(Strata,size=Num,replace=FALSE)%>%
-    mutate(Strata.Name=Strata.ID)
-  
-  Strata.Sample.Final=Strata.Sample.Final%>%
-    bind_rows(Sample)
-}
-
-
-ROWNAME=as.data.frame(c(1:1537))
-names(ROWNAME)=c("Sample.ID")
-
-Strata.Sample.Final=Strata.Sample.Final%>%
-  bind_cols(ROWNAME)
-
-
-write_csv(Strata.Sample.Final,"Strata.Sample.Final_19_05pcnt.csv")
-
-# Strata Sample cells Raster export
-
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(Strata.Sample.Final,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Sample.ID)
-names(data)=c("GoodeR.ID","data")
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-writeRaster(r,filename="Goode_Strata_SampleCells_StrataSampleID_19_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
-
-# In ArcMap, create shapefile, sort by Sample.ID
-
-#---------------------
-# Create KMLs
-#---------------------
-
-polygon <- readOGR(".", "StrataSampleID_Cells_19_05pcnt_sort")
-crs(polygon)= "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"  
-
-polygon2=spTransform(polygon,CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
-writeOGR(polygon2, dsn="SampleID_RegionStrata_19_1503_sort.kml", layer="polygon", driver="KML",overwrite=TRUE)
-
-#----
-# Create KML
-
-polygon <- readOGR(".", "SampleCell_Loss250m_RegionStrata_19_05pcnt")
-crs(polygon)= "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"  
-
-polygon2=spTransform(polygon,CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
-writeOGR(polygon2, dsn="SampleCell_Loss250m_RegionStrata_19_05pcnt.kml", layer="polygon", driver="KML")
-
-#----
-# Create Training KML
-
-polygon <- readOGR(".", "TrainingCell_Loss250m_19")
-crs(polygon)= "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"  
-
-polygon2=spTransform(polygon,CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
-writeOGR(polygon2, dsn="TrainingCellsClass17.kml", layer="polygon", driver="KML", overwrite=TRUE)
-
-polygon <- readOGR(".", "TrainingCellsClass_19")
-crs(polygon)= "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"  
-
-polygon2=spTransform(polygon,CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
-writeOGR(polygon2, dsn="TrainingCellsClass_19.kml", layer="polygon", driver="KML", overwrite=TRUE)
+# #--------------------------------------------------------
+# # separate output by region
+# #--------------------------------------------------------
+# 
+# data=raster("Goode_Boundaries_Region.tif")
+# 
+# ## Select GRID data raster ##
+# data=data%>%
+#   as.vector()%>%
+#   as.data.frame()
+# 
+# names(data)=c("Region")
+# ## create R.ID list ##
+# GoodeR_Boundaries_Region=1:6961896%>%
+#   as.vector()%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   bind_cols(data)
+# #write_csv(GoodeR_Boundaries_Region,"GoodeR_Boundaries_Region.csv")
+# 
+# FinalClass_19=read_csv("FinalClass_19_05pcnt.csv", col_types = cols(Class.Final = col_number()))
+# 
+# #---------------------
+# # add strata field #
+# #---------------------
+# 
+# MaxClass_Final=FinalClass_19%>%
+#   filter(!is.na(Class.Final))%>%
+#   left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
+#   mutate(Strata=Class.Final*10+Region)
+# 
+# StrataCount=MaxClass_Final%>%
+#   mutate(Strata.Name=as.character(round(Strata,0)))%>%
+#   group_by(Strata.Name)%>%
+#   summarize(Count=n())%>%
+#   filter(Strata.Name!="1",Strata.Name!="2",Strata.Name!="3",Strata.Name!="4",Strata.Name!="5",Strata.Name!="6",Strata.Name!="7")
+# sum=sum(StrataCount$Count)
+# 
+# #---------------------
+# # experiment with sampling size (how many cells will be required?) #
+# #---------------------
+# 
+# StrataCount=StrataCount%>%
+#   ungroup()%>%
+#   mutate(Count.pcnt=Count/sum)%>%
+#   mutate(num=round(Count.pcnt*750,0))%>%
+#   mutate(num30=ifelse(Count<30,Count,ifelse(num<30,30,num)))%>%
+#   mutate(num40=ifelse(Count<40,Count,ifelse(num<40,40,num)))%>%
+#   mutate(num50=ifelse(Count<50,Count,ifelse(num<50,50,num)))
+# 
+# num=sum(StrataCount$num)
+# num30=sum(StrataCount$num30)
+# num40=sum(StrataCount$num40)
+# num50=sum(StrataCount$num50)
+# 
+# temp=MaxClass_Final%>%
+#   select(-GoodeR.ID)%>%
+#   distinct()%>%
+#   mutate(Strata.Name=as.character(Strata))
+# 
+# StrataCount=StrataCount%>%
+#   left_join(temp,by="Strata.Name")%>%
+#   select(Strata.Name,Region,Class.Final,num40,Count)
+# 
+# 
+# write_csv(StrataCount,"StrataCount_19.csv")
+# 
+# #---------------------
+# # Strata Raster export
+# #---------------------
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(MaxClass_Final,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Strata)%>%
+#   distinct()
+# names(data)=c("GoodeR.ID","data")
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
+# plot(r)
+# writeRaster(r,filename="Goode_Strata_All_19.tiff",type="GTIFF",overwrite=TRUE)
+# #----
+# 
+# 
+# #---------------------
+# # Strata Sampling by region
+# #---------------------
+# temp=StrataCount
+# sum(temp$num40)
+# 
+# StrataName=StrataCount%>%
+#   select(Strata.Name)
+# 
+# Strata.Sample.Final=data.frame()
+# 
+# for(Strata.ID in StrataName$Strata.Name){
+#   
+#   Num=StrataCount%>%
+#     filter(Strata.Name==Strata.ID)%>%
+#     inner_join(StrataName,by="Strata.Name")%>%
+#     select(num40)
+#   Num=as.numeric(Num)
+#   
+#   Strata=MaxClass_Final%>%
+#     filter(Strata==Strata.ID)%>%
+#     select(GoodeR.ID)
+#   Strata=as.vector(Strata)
+#   
+#   Sample=sample_n(Strata,size=Num,replace=FALSE)%>%
+#     mutate(Strata.Name=Strata.ID)
+#   
+#   Strata.Sample.Final=Strata.Sample.Final%>%
+#     bind_rows(Sample)
+# }
+# 
+# 
+# ROWNAME=as.data.frame(c(1:1537))
+# names(ROWNAME)=c("Sample.ID")
+# 
+# Strata.Sample.Final=Strata.Sample.Final%>%
+#   bind_cols(ROWNAME)
+# 
+# 
+# write_csv(Strata.Sample.Final,"Strata.Sample.Final_19_05pcnt.csv")
+# 
+# # Strata Sample cells Raster export
+# 
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(Strata.Sample.Final,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Sample.ID)
+# names(data)=c("GoodeR.ID","data")
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
+# plot(r)
+# writeRaster(r,filename="Goode_Strata_SampleCells_StrataSampleID_19_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
+# 
+# # In ArcMap, create shapefile, sort by Sample.ID
+# 
+# #---------------------
+# # Create KMLs
+# #---------------------
+# 
+# polygon <- readOGR(".", "StrataSampleID_Cells_19_05pcnt_sort")
+# crs(polygon)= "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"  
+# 
+# polygon2=spTransform(polygon,CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+# writeOGR(polygon2, dsn="SampleID_RegionStrata_19_1503_sort.kml", layer="polygon", driver="KML",overwrite=TRUE)
+# 
+# #----
+# # Create KML
+# 
+# polygon <- readOGR(".", "SampleCell_Loss250m_RegionStrata_19_05pcnt")
+# crs(polygon)= "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"  
+# 
+# polygon2=spTransform(polygon,CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+# writeOGR(polygon2, dsn="SampleCell_Loss250m_RegionStrata_19_05pcnt.kml", layer="polygon", driver="KML")
+# 
+# #----
+# # Create Training KML
+# 
+# polygon <- readOGR(".", "TrainingCell_Loss250m_19")
+# crs(polygon)= "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"  
+# 
+# polygon2=spTransform(polygon,CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+# writeOGR(polygon2, dsn="TrainingCellsClass17.kml", layer="polygon", driver="KML", overwrite=TRUE)
+# 
+# polygon <- readOGR(".", "TrainingCellsClass_19")
+# crs(polygon)= "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"  
+# 
+# polygon2=spTransform(polygon,CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+# writeOGR(polygon2, dsn="TrainingCellsClass_19.kml", layer="polygon", driver="KML", overwrite=TRUE)

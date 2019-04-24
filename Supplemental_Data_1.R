@@ -56,9 +56,36 @@ rastOut <- function(df, filename, column) {
 }
 
 #---------------
-# Set workspace #
+# Set up workspace #
 #---------------
-setwd("E:/Forestry Model/Consolidated2/")
+setwd("E:/Forestry Model/clean/")
+
+sub_dir1 <- "Temp_RModelOutputsTiffs"
+sub_dir2 <- "R_FinalOutputs"
+temp_dir1 <- file.path(getwd(), sub_dir1)
+temp_dir2 <- file.path(getwd(), sub_dir2)
+
+if (!dir.exists(temp_dir1)){
+  say("")
+  say("Creating temp directory...")
+  say("")
+  dir.create(temp_dir1)
+} else {
+  say("")
+  say("Temp directory already exists, so won't be created.")
+  say("")
+}
+
+if (!dir.exists(temp_dir2)){
+  say("")
+  say("Creating Final Outputs directory...")
+  say("")
+} else {
+  say("")
+  say("Final Outputs directory already exists, so won't be created.")
+  say("")
+}
+
 
 #---------------
 # Load input datasets #

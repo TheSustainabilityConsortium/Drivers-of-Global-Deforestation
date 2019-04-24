@@ -493,12 +493,12 @@ ModelOutput.Final=ModelOutput.Final%>%
 rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__1.tiff",drivers[driver])
 
 #---------------
+say("********************")
+say("* Region 1 Complete!")
+say("********************")
 
 ModelOutput.Final__1=ModelOutput.Final%>%
   select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
-
-say("* Region 1 Complete!")
-say("********************")
 
 #-------------------------------------------------------------------
 
@@ -748,11 +748,12 @@ ModelOutput.Final=ModelOutput.Final%>%
 rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__2.tiff",drivers[driver])
 
 #---------------
+say("********************")
+say("* Region 2 Complete!")
+say("********************")
 
 ModelOutput.Final__2=ModelOutput.Final%>%
   select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
-say("* Region 2 Complete!")
-say("********************")
 
 #-------
 
@@ -1006,6 +1007,7 @@ ModelOutput.Final=ModelOutput.Final%>%
 rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__3.tiff", drivers[driver])
 
 #---------------
+say("********************")
 say("* Region 3 Complete!")
 say("********************")
 
@@ -1263,6 +1265,7 @@ ModelOutput.Final=ModelOutput.Final%>%
 rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__4.tiff",drivers[driver])
 
 #---------------
+say("********************")
 say("* Region 4 Complete!")
 say("********************")
 
@@ -1519,6 +1522,7 @@ ModelOutput.Final=ModelOutput.Final%>%
 rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__5.tiff",drivers[driver])
 
 #---------------
+say("********************")
 say("* Region 5 Complete!")
 say("********************")
 
@@ -1775,6 +1779,7 @@ ModelOutput.Final=ModelOutput.Final%>%
 rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__6.tiff",drivers[driver])
 
 #---------------
+say("********************")
 say("* Region 6 Complete!")
 say("********************")
 
@@ -2032,6 +2037,7 @@ ModelOutput.Final=ModelOutput.Final%>%
 rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__7.tiff",drivers[driver])
 
 #---------------
+say("********************")
 say("* Region 7 Complete!")
 say("********************")
 say("")
@@ -2210,11 +2216,11 @@ plot(r)
 writeRaster(r,filename="Goode_FinalClassification_19_Excludeduncertain.tif",type="GTIFF",overwrite=TRUE)
 
 
-#IMPORTANT
+# Expand in ArcGIS
 #---------------
 say("")
 say("**************************************************************************")
-say("The model is now paused.")
+say("***************************** MODEL PAUSED *******************************")
 say("Run 'Expand Final Classification' model, found in 'Forestry Models 2.tbx'.")
 say("This uses the Expand tool to classify uncertain pixels (model certainty < 50%) using nearest neighbor technique")
 say("When finished with the Expand model, the output is the final classification.")
@@ -2238,13 +2244,15 @@ LossUnClassified=temp%>%
   filter(Class==0)
 LossUnClassified=sum(LossUnClassified$Loss_10kSum_20002016)/Total
 
-LossClassified
-LossUnClassified
+say("")
+say(cat("Loss classified:", LossClassified, "%"))
+say(cat("Loss unclassified:", LossUnClassified, "%"))
+say("")
 #-----
 
-
+# This step is already done when creating the initial classification raster.  Not necessary, remove after testing.
 #-----------------------------------------
-#Re-import Expanded classes (no Uncertain class) mask out areas with loss less than 0.5% loss
+# Re-import Expanded classes (no Uncertain class) mask out areas with loss less than 0.5% loss
 #-----------------------------------------
 
 data=raster("R_FinalOutputs/Goode_FinalClassification_19_50uncertain_expanded_05pcnt.tif")
@@ -2267,16 +2275,17 @@ Goode_FinalClassification19_Expand_05pcnt=temp
 writeRaster(Goode_FinalClassification19_Expand_05pcnt, filename = "R_FinalOutputs/TestMask.tif", type="GTIFF", overwrite = TRUE)
 
 write_csv(Goode_FinalClassification19_Expand_05pcnt,"FinalClass_19_05pcnt.csv")
-
 #-----
+
 #--------------------------------------------------------
 # Generate Loss Masks for Final classification (weight classification by loss)
 #--------------------------------------------------------
 
+say("Generating loss masks for each class")
 #FinalClass_19 = read_csv("./FinalClass_19_05pcnt.csv", col_types = cols(Class.Final = col_integer()))
 FinalClass_19 = Goode_FinalClassification19_Expand_05pcnt
 
-GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData.csv")
+#GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData.csv")
 
 LossData=GoodeR_SecondaryData%>%
   select(GoodeR.ID,Loss_10kMean_20002016)%>%
@@ -2288,195 +2297,201 @@ LossData=GoodeR_SecondaryData%>%
 LossMask_19_Deforestation=LossData%>%
   filter(Class.Final==1)
 write_csv(LossMask_19_Deforestation,"LossMask_19_Deforestation.csv")
+rastOut(LossMask_19_Deforestation, "LossMask_19_Deforestation.tif", Loss_10kMean_20002016)
 
 LossMask_19_Shifting.Agriculture=LossData%>%
   filter(Class.Final==2)
 write_csv(LossMask_19_Shifting.Agriculture,"LossMask_19_Shifting.Agriculture.csv")
+rastOut(LossMask_19_Shifting.Agriculture, "LossMask_19_Shifting.Agriculture.tif", Loss_10kMean_20002016)
 
 LossMask_19_Forestry=LossData%>%
   filter(Class.Final==3)
 write_csv(LossMask_19_Forestry,"LossMask_19_Forestry.csv")
+rastOut(LossMask_19_Forestry, "LossMask_19_Forestry.tif", Loss_10kMean_20002016)
 
 LossMask_19_Wildfire=LossData%>%
   filter(Class.Final==4)
 write_csv(LossMask_19_Wildfire,"LossMask_19_Wildfire.csv")
+rastOut(LossMask_19_Wildfire, "LossMask_19_Wildfire.tif", Loss_10kMean_20002016)
 
 LossMask_19_Urban=LossData%>%
   filter(Class.Final==5)
 write_csv(LossMask_19_Urban,"LossMask_19_Urban.csv")
+rastOut(LossMask_19_Urban, "LossMask_19_Urban.tif", Loss_10kMean_20002016)
 
 LossMask_19_MinorLoss=LossData%>%
   filter(Class.Final==0)
 write_csv(LossMask_19_MinorLoss,"LossMask_19_MinorLoss.csv")
+rastOut(LossMask_19_MinorLoss, "LossMask_19_MinorLoss.tif", Loss_10kMean_20002016)
 #---
 
 #---------------------
 # Final Class _19 Raster export
 #---------------------
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(FinalClass_19,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Class.Final)
-names(data)=c("GoodeR.ID","data")
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-writeRaster(r,filename="R_FinalOutputs/Goode_FinalClassification_19_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
-
-
-#---------------------
-# LossMask_19_Deforestation Raster export
-#---------------------
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(LossMask_19_Deforestation,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)
-names(data)=c("GoodeR.ID","data")
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-writeRaster(r,filename="Goode_LossMask_19_Deforestation_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
-#----
-
-#---------------------
-# LossMask_19_Shifting.Agriculture Raster export
-#---------------------
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(LossMask_19_Shifting.Agriculture,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)
-names(data)=c("GoodeR.ID","data")
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-writeRaster(r,filename="Goode_LossMask_19_Shifting.Agriculture_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
-#----
-
-#---------------------
-# LossMask_19_Forestry Raster export
-#---------------------
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(LossMask_19_Forestry,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)
-names(data)=c("GoodeR.ID","data")
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-writeRaster(r,filename="Goode_LossMask_19_Forestry_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
-#----
-
-#---------------------
-# LossMask_19_Wildfire Raster export
-#---------------------
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(LossMask_19_Wildfire,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)
-names(data)=c("GoodeR.ID","data")
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-writeRaster(r,filename="Goode_LossMask_19_Wildfire_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
-#----
-
-#---------------------
-# LossMask_19_Urban Raster export
-#---------------------
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(LossMask_19_Urban,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)
-names(data)=c("GoodeR.ID","data")
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-writeRaster(r,filename="Goode_LossMask_19_Urban_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
-#----
-
-#---------------------
-# LossMask_19_MinorLoss Raster export
-#---------------------
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(LossMask_19_MinorLoss,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)
-names(data)=c("GoodeR.ID","data")
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
-writeRaster(r,filename="Goode_LossMask_19_MinorLoss_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
-#----
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(FinalClass_19,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Class.Final)
+# names(data)=c("GoodeR.ID","data")
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
+# plot(r)
+# writeRaster(r,filename="R_FinalOutputs/Goode_FinalClassification_19_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
+# 
+# 
+# #---------------------
+# # LossMask_19_Deforestation Raster export
+# #---------------------
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(LossMask_19_Deforestation,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Loss_10kMean_20002016)
+# names(data)=c("GoodeR.ID","data")
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
+# plot(r)
+# writeRaster(r,filename="Goode_LossMask_19_Deforestation_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
+# #----
+# 
+# #---------------------
+# # LossMask_19_Shifting.Agriculture Raster export
+# #---------------------
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(LossMask_19_Shifting.Agriculture,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Loss_10kMean_20002016)
+# names(data)=c("GoodeR.ID","data")
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
+# plot(r)
+# writeRaster(r,filename="Goode_LossMask_19_Shifting.Agriculture_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
+# #----
+# 
+# #---------------------
+# # LossMask_19_Forestry Raster export
+# #---------------------
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(LossMask_19_Forestry,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Loss_10kMean_20002016)
+# names(data)=c("GoodeR.ID","data")
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
+# plot(r)
+# writeRaster(r,filename="Goode_LossMask_19_Forestry_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
+# #----
+# 
+# #---------------------
+# # LossMask_19_Wildfire Raster export
+# #---------------------
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(LossMask_19_Wildfire,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Loss_10kMean_20002016)
+# names(data)=c("GoodeR.ID","data")
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
+# plot(r)
+# writeRaster(r,filename="Goode_LossMask_19_Wildfire_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
+# #----
+# 
+# #---------------------
+# # LossMask_19_Urban Raster export
+# #---------------------
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(LossMask_19_Urban,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Loss_10kMean_20002016)
+# names(data)=c("GoodeR.ID","data")
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
+# plot(r)
+# writeRaster(r,filename="Goode_LossMask_19_Urban_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
+# #----
+# 
+# #---------------------
+# # LossMask_19_MinorLoss Raster export
+# #---------------------
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(LossMask_19_MinorLoss,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Loss_10kMean_20002016)
+# names(data)=c("GoodeR.ID","data")
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
+# plot(r)
+# writeRaster(r,filename="Goode_LossMask_19_MinorLoss_05pcnt.tiff",type="GTIFF",overwrite=TRUE)
+# #----
 
 # #--------------------------------------------------------
 # # separate output by region

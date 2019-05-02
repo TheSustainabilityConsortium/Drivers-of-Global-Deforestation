@@ -20,6 +20,7 @@ pause <- function() {
   else {
     cat("Press <Enter> to continue...")
     invisible(readLines(file("stdin"), 1))
+    close(file("stdin"))
   }
 }
 
@@ -65,6 +66,7 @@ sub_dir2 <- "R_FinalOutputs"
 temp_dir1 <- file.path(getwd(), sub_dir1)
 temp_dir2 <- file.path(getwd(), sub_dir2)
 
+# create output directories if they don't already exist
 if (!dir.exists(temp_dir1)){
   say("")
   say("Creating temp directory...")
@@ -80,6 +82,7 @@ if (!dir.exists(temp_dir2)){
   say("")
   say("Creating Final Outputs directory...")
   say("")
+  dir.create(temp_dir2)
 } else {
   say("")
   say("Final Outputs directory already exists, so won't be created.")
@@ -93,11 +96,15 @@ if (!dir.exists(temp_dir2)){
 
 # Required:
 say("Reading Region Boundaries...")
-GoodeR_Boundaries_Region=read_csv("GoodeR_Boundaries_Region.csv", guess_max = 600000)
+GoodeR_Boundaries_Region=read_csv("GoodeR_Boundaries_Region.csv", col_types = cols(GoodeR.ID = col_integer(), Region = col_integer()))
 say("Reading Training Points...")
-TrainingPoints = read_csv("TrainingPoints_19_full.csv")
+TrainingPoints = read_csv("TrainingPointsFull.csv", col_types = cols(GoodeR.ID = col_integer(), Training.Class = col_integer()))
 say("Reading Loss Mask...")
-LossMaskFull= read_csv("LossMaskFull_20002016.csv", col_types = cols(Loss_10kMean_20002016 = col_number()))
+LossMaskFull= read_csv("LossMaskFull.csv", col_types = cols(col_integer(), col_number()))
+GoodeR=1:6961896%>%
+  as.vector()%>%
+  as.data.frame()%>%
+  rename("GoodeR.ID"=".")
 
 # Optional:
 # Look for GoodeR_SecondaryData in workspace.  Import or notify user it is missing.
@@ -105,7 +112,7 @@ if (TRUE %in% (list.files() == 'GoodeR_SecondaryData.csv')) {
   say("Reading GoodeR_SecondaryData...")
   GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData.csv")
   GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-    filter(Loss_10kMean_20002016>0)
+    filter(GoodeR_SecondaryData[41]>0)
 } else {
   say("Secondary Data not found in workspace.  It will be calculated.")
 }
@@ -118,151 +125,139 @@ if (TRUE %in% (list.files() == 'TrainingPoints_PrimaryData.csv')) {
   say("Training Points Primary Data not found in workspace.  It will be calculated.")
 }
 
+# Get list of secondary data files
+FileList=as.data.frame(list.files(path = "./R_ModelInputs_SecondaryData",
+                                  pattern = ".tif$", all.files = FALSE,
+                                  full.names = FALSE, recursive = FALSE,
+                                  ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE))
+names(FileList)=c("FileName")
+Variables <- FileList
+names(Variables)=c("Name")
+# Strip file prefixes and suffixes
+Variables$Name <- Variables$Name %>%
+  str_replace("Goode_","") %>%
+  str_replace(".tif","")
+
 #---------------
 # Create Training points with data #
 #---------------
+  
+say("Checking inputs for TrainingPoints_PrimaryData...")
 
-# If TrainingPoints_PrimaryData doesn't exist (wasn't imported above), compute it
-if (exists("TrainingPoints_PrimaryData") == FALSE) {
+for(NAME in FileList$FileName){
+  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
   
-  say("Checking inputs for TrainingPoints_PrimaryData...")
-  
-  # import data into big list #
-  FileList=as.data.frame(list.files(path = "./R_ModelInputs_SecondaryData",
-                                    pattern = ".tif$", all.files = FALSE,
-                                    full.names = FALSE, recursive = FALSE,
-                                    ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE))
-  names(FileList)=c("FileName")
-  
-  for(NAME in FileList$FileName){
-    data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
-    
-    if(nrow(data)!=1737){
+  if(nrow(data)!=1737){
+    bad(c(NAME, "has a problem"))
+  } else{
+    if (ncol(data)!=4008) {
       bad(c(NAME, "has a problem"))
-    } else{
-      if (ncol(data)!=4008) {
-        bad(c(NAME, "has a problem"))
-      }else{
-        say(c(NAME, "looks good"))
-      }
+    }else{
+      say(c(NAME, "looks good"))
     }
   }
-  
-  say("If all inputs look good, press Enter, if any failed, press Ctrl+C then Enter to quit and fix them.")
-  pause()
-  
-  say("Calculating Training Points")
-  temp=as.data.frame(c(1:nrow(TrainingPoints)))
-  names(temp)=c("TrainingID")
-  # Make columns for each driver (1 is that class, 0 is not that class)
-  TrainingPoints=TrainingPoints%>%
-    bind_cols(temp)%>%
-    mutate(Deforestation=ifelse(Training.Class==1,1,0))%>%
-    mutate(Shifting.Agriculture=ifelse(Training.Class==2,1,0))%>%
-    mutate(TreeFarm.ForestryOther=ifelse(Training.Class==3,1,0))%>%
-    mutate(Wildfire=ifelse(Training.Class==4,1,0))%>%
-    mutate(Urban=ifelse(Training.Class==5,1,0))
-  
-  
-  TrainingPoints_PrimaryData=TrainingPoints%>%
-    filter(Training.Class!=7)
-  #activate this
-  #write_csv(TrainingPoints,"TrainingPoints19.csv")
-  
-  for(NAME in FileList$FileName){
-    say(c("Reading", NAME))
-    data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
-    NAME2=NAME%>%
-      str_replace("^Goode_", "")%>%
-      str_replace(".tif$", "")
-    ## Select GRID data raster ##
-    data=data%>%
-      as.vector()%>%
-      as.data.frame()
-    names(data)=c(paste(NAME2))
-    ## create R.ID list ##
-    GoodeRList=1:6961896%>%
-      as.vector()%>%
-      as.data.frame()%>%
-      rename("GoodeR.ID"=".")%>%
-      bind_cols(data)
-    TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
-      left_join(GoodeRList,by="GoodeR.ID")
-  }
-  TrainingPoints_PrimaryData[is.na(TrainingPoints_PrimaryData)]=0
-  TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
-    distinct()
-  
-  pause()
-  
-  say("Writing TrainingPoints_PrimaryData.csv to working directory...")
-  write_csv(TrainingPoints_PrimaryData,"TrainingPoints_PrimaryData.csv")
 }
+
+say("If all inputs look good, press Enter, if any failed, press Ctrl+C then Enter to quit and fix them.")
+pause()
+
+say("Calculating Training Points")
+temp=as.data.frame(c(1:nrow(TrainingPoints)))
+names(temp)=c("TrainingID")
+# Make columns for each driver (1 is that class, 0 is not that class)
+TrainingPoints=TrainingPoints%>%
+  bind_cols(temp)%>%
+  mutate(Deforestation=ifelse(Training.Class==1,1,0))%>%
+  mutate(Shifting.Agriculture=ifelse(Training.Class==2,1,0))%>%
+  mutate(TreeFarm.ForestryOther=ifelse(Training.Class==3,1,0))%>%
+  mutate(Wildfire=ifelse(Training.Class==4,1,0))%>%
+  mutate(Urban=ifelse(Training.Class==5,1,0))
+
+
+TrainingPoints_PrimaryData=TrainingPoints%>%
+  filter(Training.Class!=7)
+#activate this
+#write_csv(TrainingPoints,"TrainingPoints19.csv")
+
+for(NAME in FileList$FileName){
+  say(c("Reading", NAME))
+  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
+  NAME2=NAME%>%
+    str_replace("^Goode_", "")%>%
+    str_replace(".tif$", "")
+  ## Select GRID data raster ##
+  data=data%>%
+    as.vector()%>%
+    as.data.frame()
+  names(data)=c(paste(NAME2))
+  ## create R.ID list ##
+  GoodeRList=1:6961896%>%
+    as.vector()%>%
+    as.data.frame()%>%
+    rename("GoodeR.ID"=".")%>%
+    bind_cols(data)
+  TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
+    left_join(GoodeRList,by="GoodeR.ID")
+}
+TrainingPoints_PrimaryData[is.na(TrainingPoints_PrimaryData)]=0
+TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
+  distinct()
+  
+  # Disabling this because it just creates the possibility of contamination from old data.  If the model is 
+  # being run again, it's worth recalculating the secondary data, because presumably, something has changed.
+  #
+  # say("Writing TrainingPoints_PrimaryData.csv to working directory...")
+  # write_csv(TrainingPoints_PrimaryData,"TrainingPoints_PrimaryData.csv")
 
 #---------------
 # Create full list of Secondary Data #
 #---------------
 ## Mask by loss extent to make smaller ##
 
-# If GoodeR_SecondaryData doesn't exist (wasn't imported above), compute it
-if (exists("GoodeR_SecondaryData") == FALSE) {
+say("Calculating GoodeR_SecondaryData...")
 
-  say("Calculating GoodeR_SecondaryData...")
+GoodeR_SecondaryData=LossMaskFull%>%
+  filter(LossMaskFull[2] > 0)%>%
+  select(GoodeR.ID)
+tppd=TrainingPoints_PrimaryData%>%
+  select(GoodeR.ID,TrainingID)
+GoodeR_SecondaryData=GoodeR_SecondaryData%>%
+  left_join(tppd,by="GoodeR.ID")
+GoodeR_SecondaryData$TrainingID[is.na(GoodeR_SecondaryData$TrainingID)]=0
+
+for(NAME in FileList$FileName){
   
-  GoodeR_SecondaryData=1:6961896%>%
+  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
+  
+  say(c("Reading ", NAME))
+  
+  NAME2=NAME%>%
+    str_replace("^Goode_", "")%>%
+    str_replace(".tif$", "")
+  
+  ## Select GRID data raster ##
+  data=data%>%
     as.vector()%>%
-    as.data.frame()%>%
-    rename("GoodeR.ID"=".")%>%
-    inner_join(LossMaskFull,by="GoodeR.ID")%>%
-    filter(Loss_10kMean_20002016>0)%>%
-    select(-Loss_10kMean_20002016)
-  temp=TrainingPoints_PrimaryData%>%
-    select(GoodeR.ID,TrainingID)
+    as.data.frame()
+  names(data)=c(paste(NAME2))
+  ## create R.ID list ##
+  GoodeRList=GoodeR%>%
+    bind_cols(data)
   GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-    left_join(temp,by="GoodeR.ID")
-  GoodeR_SecondaryData$TrainingID[is.na(GoodeR_SecondaryData$TrainingID)]=0
-  
-  # import data into big list #
-  FileList=as.data.frame(list.files(path = "./R_ModelInputs_SecondaryData",
-                                    pattern = ".tif$", all.files = FALSE,
-                                    full.names = FALSE, recursive = FALSE,
-                                    ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE))
-  names(FileList)=c("FileName")
-  
-  for(NAME in FileList$FileName){
-    
-    data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
-    
-    say(c("Reading ", NAME))
-    
-    NAME2=NAME%>%
-      str_replace("^Goode_", "")%>%
-      str_replace(".tif$", "")
-    
-    ## Select GRID data raster ##
-    data=data%>%
-      as.vector()%>%
-      as.data.frame()
-    names(data)=c(paste(NAME2))
-    ## create R.ID list ##
-    GoodeRList=1:6961896%>%
-      as.vector()%>%
-      as.data.frame()%>%
-      rename("GoodeR.ID"=".")%>%
-      #look into different function
-      bind_cols(data)
-    GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-      left_join(GoodeRList,by="GoodeR.ID")
-  }
-  GoodeR_SecondaryData[is.na(GoodeR_SecondaryData)]=0
-  GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-    left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")
-  GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-    filter(!is.na(Region))
-  
-  say("Writing GoodeR_SecondaryData.csv to working directory...")
-  write_csv(GoodeR_SecondaryData, "./GoodeR_SecondaryData.csv")
+    left_join(GoodeRList,by="GoodeR.ID")
 }
+GoodeR_SecondaryData[is.na(GoodeR_SecondaryData)]=0
+GoodeR_SecondaryData=GoodeR_SecondaryData%>%
+  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")
+GoodeR_SecondaryData=GoodeR_SecondaryData%>%
+   filter(!is.na(Region))
+
+# Disabling this because it just creates the possibility of contamination from old data.  If the model is 
+# being run again, it's worth recalculating the secondary data, because presumably, something has changed.
+#
+# say("Writing GoodeR_SecondaryData.csv to working directory...")
+# write_csv(GoodeR_SecondaryData, "./GoodeR_SecondaryData.csv")
+
 #----
 
 #-----------------------
@@ -270,1872 +265,125 @@ if (exists("GoodeR_SecondaryData") == FALSE) {
 #-----------------------
 
 regions <- c(1, 2, 3, 4, 5, 6, 7)
-drivers <- c("Output_Deforestation", "Output_Shifting.Agriculture", "Output_TreeFarm.ForestryOther", "Output_Wildfire", "Output_Urban")
-
-#----------------------------------------------------------------------------------------
-#Region 1
-#----------------------------------------------------------------------------------------
-say("")
-say("********************")
-say("* Setting up Region 1")
-say("********************")
-
-TrainingPoints_PrimaryData__1=TrainingPoints_PrimaryData%>%
-  left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
-  mutate(Region=replace(Region,,as.numeric(Region)))%>%
-  filter(Region==1)
-
-driver <- 1
-region <- 1
-
-#-----------------------
-#Deforestation__1#
-#-----------------------
-say("Calculating Deforestation Tree...")
-
-InputData=select(TrainingPoints_PrimaryData__1,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Deforestation~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Deforestation__1=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Deforestation=predict(Fit_Deforestation__1, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==1)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput
-
-rastOut(ModelOutput,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__1.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Shifting.Agriculture__1#
-#-----------------------
-say("Calculating Shifting Ag Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__1,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Shifting.Agriculture~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Shifting.Agriculture__1=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Shifting.Agriculture=predict(Fit_Shifting.Agriculture__1, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==1)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__1.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#TreeFarm.ForestryOther__1#
-#-----------------------
-say("Calculating Forestry Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__1,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(TreeFarm.ForestryOther~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_TreeFarm.ForestryOther__1=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_TreeFarm.ForestryOther=predict(Fit_TreeFarm.ForestryOther__1, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==1)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__1.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Wildfire__1#
-#-----------------------
-say("Calculating Wildfire Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__1,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Wildfire~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Wildfire__1=fit
-#fancyRpartPlot(Fit_Wildfire__1)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Wildfire=predict(Fit_Wildfire__1, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==1)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__1.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Urban__1#
-#-----------------------
-say("Calculating Urban Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__1,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Urban~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Urban__1=fit
-#fancyRpartPlot(Fit_Urban__1)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Urban=predict(Fit_Urban__1, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==1)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__1.tiff",drivers[driver])
-
-#---------------
-say("********************")
-say("* Region 1 Complete!")
-say("********************")
-
-ModelOutput.Final__1=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
-
-#-------------------------------------------------------------------
-
-#----------------------------------------------------------------------------------------
-#Region__2
-#----------------------------------------------------------------------------------------
-say("")
-say("********************")
-say("* Setting up Region 2...")
-say("********************")
-
-TrainingPoints_PrimaryData__2=TrainingPoints_PrimaryData%>%
-  left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
-  mutate(Region=replace(Region,,as.numeric(Region)))%>%
-  filter(Region==2)
-
-driver <- 1
-region <- region + 1
-
-#-----------------------
-#Deforestation__2#
-#-----------------------
-say("Calculating Deforestation Tree...")
-
-InputData=select(TrainingPoints_PrimaryData__2,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Deforestation~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Deforestation__2=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Deforestation=predict(Fit_Deforestation__2, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==2)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__2.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Shifting.Agriculture__2#
-#-----------------------
-say("Calculating Shifting Ag Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__2,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Shifting.Agriculture~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Shifting.Agriculture__2=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Shifting.Agriculture=predict(Fit_Shifting.Agriculture__2, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==2)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__2.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#TreeFarm.ForestryOther__2#
-#-----------------------
-say("Calculating Forestry Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__2,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(TreeFarm.ForestryOther~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_TreeFarm.ForestryOther__2=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_TreeFarm.ForestryOther=predict(Fit_TreeFarm.ForestryOther__2, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==2)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__2.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Wildfire__2#
-#-----------------------
-say("Calculating Wildfire Tree...")
-
-InputData=select(TrainingPoints_PrimaryData__2,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Wildfire~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Wildfire__2=fit
-#fancyRpartPlot(Fit_Wildfire__2)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Wildfire=predict(Fit_Wildfire__2, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==2)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__2.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Urban__2#
-#-----------------------
-say("Calculating Urban Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__2,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Urban~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Urban__2=fit
-#fancyRpartPlot(Fit_Urban__2)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Urban=predict(Fit_Urban__2, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==2)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__2.tiff",drivers[driver])
-
-#---------------
-say("********************")
-say("* Region 2 Complete!")
-say("********************")
-
-ModelOutput.Final__2=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
-
-#-------
-
-
-
-#----------------------------------------------------------------------------------------
-#Region__3
-#----------------------------------------------------------------------------------------
-say("")
-say("********************")
-say("* Setting Up Region 3...")
-say("********************")
-
-TrainingPoints_PrimaryData__3=TrainingPoints_PrimaryData%>%
-  left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
-  mutate(Region=replace(Region,,as.numeric(Region)))%>%
-  filter(Region==3)
-
-driver <- 1
-region <- region + 1
-
-#-----------------------
-#Deforestation__3#
-#-----------------------
-say("Calculating Deforestation Tree...")
-
-InputData=select(TrainingPoints_PrimaryData__3,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Deforestation~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Deforestation__3=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Deforestation=predict(Fit_Deforestation__3, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==3)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__3.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Shifting.Agriculture__3#
-#-----------------------
-say("Calculating Shifting Ag Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__3,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Shifting.Agriculture~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Shifting.Agriculture__3=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Shifting.Agriculture=predict(Fit_Shifting.Agriculture__3, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==3)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__3.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#TreeFarm.ForestryOther__3#
-#-----------------------
-say("Calculating Forestry Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__3,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(TreeFarm.ForestryOther~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_TreeFarm.ForestryOther__3=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_TreeFarm.ForestryOther=predict(Fit_TreeFarm.ForestryOther__3, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==3)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__3.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Wildfire__3#
-#-----------------------
-say("Calculating Wildfire Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__3,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Wildfire~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Wildfire__3=fit
-#fancyRpartPlot(Fit_Wildfire__3)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Wildfire=predict(Fit_Wildfire__3, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==3)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__3.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Urban__3#
-#-----------------------
-say("Calculating Urban Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__3,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Urban~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Urban__3=fit
-#fancyRpartPlot(Fit_Urban__3)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Urban=predict(Fit_Urban__3, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==3)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__3.tiff", drivers[driver])
-
-#---------------
-say("********************")
-say("* Region 3 Complete!")
-say("********************")
-
-ModelOutput.Final__3=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
-
-#-------
-
-
-#----------------------------------------------------------------------------------------
-#Region__4
-#----------------------------------------------------------------------------------------
-say("")
-say("********************")
-say("* Setting up Region 4...")
-say("********************")
-
-TrainingPoints_PrimaryData__4=TrainingPoints_PrimaryData%>%
-  left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
-  mutate(Region=replace(Region,,as.numeric(Region)))%>%
-  filter(Region==4)
-
-driver <- 1
-region <- region + 1
-
-#-----------------------
-#Deforestation__4#
-#-----------------------
-say("Calculating Deforestation Tree...")
-
-InputData=select(TrainingPoints_PrimaryData__4,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Deforestation~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Deforestation__4=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Deforestation=predict(Fit_Deforestation__4, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==4)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__4.tiff", drivers[driver])
-
-#---------------
-
-#-----------------------
-#Shifting.Agriculture__4#
-#-----------------------
-say("Calculating Shifting Ag Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__4,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Shifting.Agriculture~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Shifting.Agriculture__4=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Shifting.Agriculture=predict(Fit_Shifting.Agriculture__4, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==4)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__4.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#TreeFarm.ForestryOther__4#
-#-----------------------
-say("Calculating Forestry Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__4,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(TreeFarm.ForestryOther~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_TreeFarm.ForestryOther__4=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_TreeFarm.ForestryOther=predict(Fit_TreeFarm.ForestryOther__4, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==4)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__4.tiff", drivers[driver])
-
-#---------------
-
-#-----------------------
-#Wildfire__4#
-#-----------------------
-say("Calculating Wildfire Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__4,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Wildfire~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Wildfire__4=fit
-#fancyRpartPlot(Fit_Wildfire__4)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Wildfire=predict(Fit_Wildfire__4, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==4)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__4.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Urban__4#
-#-----------------------
-say("Calculating Urban Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__4,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Urban~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Urban__4=fit
-#fancyRpartPlot(Fit_Urban__4)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Urban=predict(Fit_Urban__4, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==4)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__4.tiff",drivers[driver])
-
-#---------------
-say("********************")
-say("* Region 4 Complete!")
-say("********************")
-
-ModelOutput.Final__4=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
-
-#-------
-
-#----------------------------------------------------------------------------------------
-#Region__5
-#----------------------------------------------------------------------------------------
-say("")
-say("********************")
-say("* Setting up Region 5...")
-say("********************")
-
-TrainingPoints_PrimaryData__5=TrainingPoints_PrimaryData%>%
-  left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
-  mutate(Region=replace(Region,,as.numeric(Region)))%>%
-  filter(Region==5)
-
-driver <- 1
-region <- region + 1
-
-#-----------------------
-#Deforestation__5#
-#-----------------------
-say("Calculating Deforestation Tree...")
-
-InputData=select(TrainingPoints_PrimaryData__5,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Deforestation~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Deforestation__5=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Deforestation=predict(Fit_Deforestation__5, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==5)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__5.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Shifting.Agriculture__5#
-#-----------------------
-say("Calculating Shifting Ag Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__5,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Shifting.Agriculture~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Shifting.Agriculture__5=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Shifting.Agriculture=predict(Fit_Shifting.Agriculture__5, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==5)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__5.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#TreeFarm.ForestryOther__5#
-#-----------------------
-say("Calculating Forestry Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__5,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(TreeFarm.ForestryOther~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_TreeFarm.ForestryOther__5=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_TreeFarm.ForestryOther=predict(Fit_TreeFarm.ForestryOther__5, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==5)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__5.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Wildfire__5#
-#-----------------------
-say("Calculating Wildfire Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__5,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Wildfire~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Wildfire__5=fit
-#fancyRpartPlot(Fit_Wildfire__5)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Wildfire=predict(Fit_Wildfire__5, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==5)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__5.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Urban__5#
-#-----------------------
-say("Calculating Urban Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__5,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Urban~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Urban__5=fit
-#fancyRpartPlot(Fit_Urban__5)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Urban=predict(Fit_Urban__5, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==5)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__5.tiff",drivers[driver])
-
-#---------------
-say("********************")
-say("* Region 5 Complete!")
-say("********************")
-
-ModelOutput.Final__5=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
-
-#-------
-
-#----------------------------------------------------------------------------------------
-#Region__6
-#----------------------------------------------------------------------------------------
-say("")
-say("********************")
-say("* Setting up Region 6...")
-say("********************")
-
-TrainingPoints_PrimaryData__6=TrainingPoints_PrimaryData%>%
-  left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
-  mutate(Region=replace(Region,,as.numeric(Region)))%>%
-  filter(Region==6)
-
-driver <- 1
-region <- region + 1
-
-#-----------------------
-#Deforestation__6#
-#-----------------------
-say("Calculating Deforestation Tree...")
-
-InputData=select(TrainingPoints_PrimaryData__6,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Deforestation~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016+LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Deforestation__6=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Deforestation=predict(Fit_Deforestation__6, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==6)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__6.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Shifting.Agriculture__6#
-#-----------------------
-say("Calculating Shifting Ag Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__6,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Shifting.Agriculture~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Shifting.Agriculture__6=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Shifting.Agriculture=predict(Fit_Shifting.Agriculture__6, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==6)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__6.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#TreeFarm.ForestryOther__6#
-#-----------------------
-say("Calculating Forestry Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__6,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(TreeFarm.ForestryOther~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_TreeFarm.ForestryOther__6=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_TreeFarm.ForestryOther=predict(Fit_TreeFarm.ForestryOther__6, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==6)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__6.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Wildfire__6#
-#-----------------------
-say("Calculating Wildfire Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__6,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Wildfire~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Wildfire__6=fit
-#fancyRpartPlot(Fit_Wildfire__6)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Wildfire=predict(Fit_Wildfire__6, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==6)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__6.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Urban__6#
-#-----------------------
-say("Calculating Urban Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__6,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Urban~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Urban__6=fit
-#fancyRpartPlot(Fit_Urban__6)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Urban=predict(Fit_Urban__6, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==6)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__6.tiff",drivers[driver])
-
-#---------------
-say("********************")
-say("* Region 6 Complete!")
-say("********************")
-
-ModelOutput.Final__6=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
-
-#-------
-
-
-#----------------------------------------------------------------------------------------
-#Region__7
-#----------------------------------------------------------------------------------------
-say("")
-say("********************")
-say("* Setting up Region 7...")
-say("********************")
-
-TrainingPoints_PrimaryData__7=TrainingPoints_PrimaryData%>%
-  left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
-  mutate(Region=replace(Region,,as.numeric(Region)))%>%
-  filter(Region==7)
-
-driver <- 1
-region <- region + 1
-
-#-----------------------
-#Deforestation__7#
-#-----------------------
-say("Calculating Deforestation Tree...")
-
-InputData=select(TrainingPoints_PrimaryData__7,Deforestation,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Deforestation~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Deforestation__7=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Deforestation=predict(Fit_Deforestation__7, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==7)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Deforestation__7.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Shifting.Agriculture__7#
-#-----------------------
-say("Calculating Shifting Ag Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__7,Shifting.Agriculture,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Shifting.Agriculture~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Shifting.Agriculture__7=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Shifting.Agriculture=predict(Fit_Shifting.Agriculture__7, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==7)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Shifting.Agriculture__7.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#TreeFarm.ForestryOther__7#
-#-----------------------
-say("Calculating Forestry Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__7,TreeFarm.ForestryOther,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(TreeFarm.ForestryOther~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_TreeFarm.ForestryOther__7=fit
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_TreeFarm.ForestryOther=predict(Fit_TreeFarm.ForestryOther__7, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==7)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_TreeFarm.ForestryOther__7.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Wildfire__7#
-#-----------------------
-say("Calculating Wildfire Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__7,Wildfire,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Wildfire~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Wildfire__7=fit
-#fancyRpartPlot(Fit_Wildfire__7)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Wildfire=predict(Fit_Wildfire__7, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==7)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Wildfire__7.tiff",drivers[driver])
-
-#---------------
-
-#-----------------------
-#Urban__7#
-#-----------------------
-say("Calculating Urban Tree...")
-
-driver <- driver + 1
-
-InputData=select(TrainingPoints_PrimaryData__7,Urban,FireBrightness_80_10kMax_20002015:TreeCover_10kSum)
-fit=rpart(Urban~
-            FireBrightness_80_10kMax_20002015+ FireBrightness_80_10kMax1kMean_20002015+ FireBrightness_80_10kMax1kSum_20002015+ FireBrightness_80_10kMean_20002015+ FireBrightness_80_10kMean1kMax_20002015+ FireBrightness_80_10kMean1kSum_20002015+ FireBrightness_80_10kSum_20002015+     
-            FireCount_80_10kMax_20002015+   FireCount_80_10kMax1kMean_20002015+ FireCount_80_10kMax1kSum_20002015+ FireCount_80_10kMean_20002015+ FireCount_80_10kMean1kMax_20002015+ FireCount_80_10kMean1kSum_20002015+ FireCount_80_10kSum_20002015+          
-            FireFRP_80_10kMax_20002015+ FireFRP_80_10kMax1kMean_20002015+ FireFRP_80_10kMax1kSum_230002015+ FireFRP_80_10kMean_20002015+ FireFRP_80_10kMean1kMax_20002015+ FireFRP_80_10kMean1kSum_20002015+ FireFRP_80_10kSum_20002015+            
-            FireLoss_10kMax_20002016+FireLoss_10kMax1kMean_20002016+FireLoss_10kMax1kSum_20002016+FireLoss_10kMean_20002016+FireLoss_10kMean1kMax_20002016+FireLoss_10kMean1kSum_20002016+FireLoss_10kSum_20002016+
-            Gain_10kMax+Gain_10kMax1kMean+Gain_10kMax1kSum+Gain_10kMean+Gain_10kMean1kMax+Gain_10kMean1kSum+Gain_10kSum+
-            LandCover_Needleleaf_1+
-            LandCover_EvergreenBroadleaf_2+
-            LandCover_DeciduousBroadleaf_3+
-            LandCover_MixedOther_4+
-            Loss_10kMax_20002016+Loss_10kMax1kMean_20002016+Loss_10kMax1kSum_20002016+Loss_10kMean_20002016+Loss_10kMean1kMax_20002016+Loss_10kMean1kSum_20002016+Loss_10kSum_20002016+
-            Loss_NetMean+
-            LossYearDiff_10kMax_20002016+LossYearDiff_10kMax1kMean_20002016+LossYearDiff_10kMax1kSum_20002016+LossYearDiff_10kMean_20002016++LossYearDiff_10kMean1kMax_20002016+LossYearDiff_10kMean1kSum_20002016+LossYearDiff_10kSum_20002016+
-            LossYearDiff1k_10kMax1kDiff_20002016++LossYearDiff1k_10kMean1kDiff_20002016+LossYearDiff1k_10kSum1kDiff_20002016+
-            Population2000_10kMax+Population2000_10kMax1kMean+Population2000_10kMax1kSum+Population2000_10kMean+Population2000_10kMean1kMax+Population2000_10kMean1kSum+Population2000_10kSum+
-            Population2015_10kMax+Population2015_10kMax1kMean+Population2015_10kMax1kSum+Population2015_10kMean+Population2015_10kMean1kMax+Population2015_10kMean1kSum+Population2015_10kSum+
-            PopulationDifference20002015_10kMax+PopulationDifference20002015_10kMax1kMean+PopulationDifference20002015_10kMax1kSum+PopulationDifference20002015_10kMean+PopulationDifference20002015_10kMean1kMax+PopulationDifference20002015_10kMean1kSum+
-            TreeCover_10kMax+ TreeCover_10kMax1kMean+ TreeCover_10kMax1kSum+ TreeCover_10kMean+ TreeCover_10kMean1kMax+ TreeCover_10kMean1kSum+ TreeCover_10kSum,
-          data=InputData, method="anova")
-fit=prune(fit, cp=.02)
-#fit=prune(fit, cp= fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-fancyRpartPlot(fit)
-Fit_Urban__7=fit
-#fancyRpartPlot(Fit_Urban__7)
-## Fit Trees to full GoodeR data ##
-ModelOutput=GoodeR_SecondaryData%>%
-  select(GoodeR.ID)%>%
-  mutate(Output_Urban=predict(Fit_Urban__7, type="vector", newdata=GoodeR_SecondaryData))%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-  filter(Region==7)%>%
-  select(-Region)
-
-ModelOutput.Final=ModelOutput.Final%>%
-  distinct()%>%
-  left_join(ModelOutput,by="GoodeR.ID")
-
-rastOut(ModelOutput.Final,"Temp_RModelOutputsTiffs/TEST_Output_Urban__7.tiff",drivers[driver])
-
-#---------------
-say("********************")
-say("* Region 7 Complete!")
-say("********************")
-say("")
-
-ModelOutput.Final__7=ModelOutput.Final%>%
-  select(GoodeR.ID,Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
-
-#-------
+driverNames <- c("Deforestation", "Shifting.Agriculture", "TreeFarm.ForestryOther", "Wildfire", "Urban")
+drivers <- c(1, 2, 3, 4, 5)
+ModelOutput <- list()
+ModelOutput.Regional <- list()
+regionalOutputs <- list()
+
+
+for (region in regions){
+  say("")
+  say("********************")
+  say(c("* Setting up Region",region))
+  say("********************")
+  
+  # extract only training points within the current region from the full set
+  TrainingPoints_Regional <- TrainingPoints_PrimaryData%>%
+    left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
+    mutate(Region=replace(Region,,as.numeric(Region)))%>%
+    filter(Region==c(region))
+
+  for (driver in drivers){
+    say(c("Calculating",driverNames[driver],"Tree..."))
+    
+    # select the column for the current driver, then all variable columns
+    InputData <- select(TrainingPoints_Regional,driverNames[driver],Variables$Name[1]:Variables$Name[length(Variables$Name)])
+    
+    # give rpart a formula where the current driver is defined as the sum of all variables in Variables$Name, pass InputData and define method
+    fit <- rpart(as.formula(paste(paste(driverNames[driver],"~",sep=""),paste(Variables$Name, collapse="+"))),data=InputData,method = "anova")
+    fit=prune(fit,cp=.02)
+    
+    # plot the tree and give it a title of 'Region: Driver'
+    fancyRpartPlot(fit, main = paste("Region", region, ":", driverNames[driver], sep = " "))
+    
+    # generate name for model output field
+    outName <- paste("Output", driverNames[driver], sep = "_")
+    
+    # calculate probability of current driver for whole dataset
+    # Give tree full dataset and record probability for each (to be used later in regional voting)
+    ModelOutput[[driver]] = GoodeR_SecondaryData%>%
+      select(GoodeR.ID)%>%
+      left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
+      # the "!! outName :=" uses the variable value as the new column name, rather than the literal string 'outName'
+      mutate(!!outName := predict(fit, type="vector", newdata=GoodeR_SecondaryData))%>%
+      filter(Region==paste(region))%>%
+      select(-Region)
+  }
+  # Collect class probabilities from each tree in ModelOutput.Full
+  ModelOutput.Regional[[region]] <- as.data.frame(Reduce(function(x, y) merge(x, y, by="GoodeR.ID", all.x=TRUE), ModelOutput))
+  
+  say("********************")
+  say(c("* Region",region,"Complete!"))
+  say("********************")
+}
+
+# Combine all regions into the final table
+ModelOutput.All <- Reduce(function(x, y) bind_rows(x, y), ModelOutput.Regional)
 
 #-----------------------
 # Combine into final output list #
 #-----------------------
-say("Combining Regions...")
-
-ModelOutput.Final_All=ModelOutput.Final__1%>%
-  bind_rows(ModelOutput.Final__2)%>%
-  bind_rows(ModelOutput.Final__3)%>%
-  bind_rows(ModelOutput.Final__4)%>%
-  bind_rows(ModelOutput.Final__5)%>%
-  bind_rows(ModelOutput.Final__6)%>%
-  bind_rows(ModelOutput.Final__7)
-
-say("Writing raw model output to ModelOutput.Final_19.csv")
-
-write_csv(ModelOutput.Final_All,"ModelOutput.Final_19.csv")
+# say("")
+# say("Combining Regions...")
+# 
+# ModelOutput.Final_All=ModelOutput.Final__1%>%
+#   bind_rows(ModelOutput.Final__2)%>%
+#   bind_rows(ModelOutput.Final__3)%>%
+#   bind_rows(ModelOutput.Final__4)%>%
+#   bind_rows(ModelOutput.Final__5)%>%
+#   bind_rows(ModelOutput.Final__6)%>%
+#   bind_rows(ModelOutput.Final__7)
+# 
+# say("Writing raw model output to ModelOutput.Final_19.csv")
+# 
+# write_csv(ModelOutput.Final_All,"ModelOutput.Final_19.csv")
 #------
 
 #---------------
 # view decision tree Rplots
 #---------------
-say("Plotting Decision Trees...")
-
-fancyRpartPlot(Fit_Deforestation__1, main = "Deforestation 1")
-fancyRpartPlot(Fit_Deforestation__2, main = "Deforestation 2")
-fancyRpartPlot(Fit_Deforestation__3, main = "Deforestation 3")
-fancyRpartPlot(Fit_Deforestation__4, main = "Deforestation 4")
-fancyRpartPlot(Fit_Deforestation__5, main = "Deforestation 5")
-fancyRpartPlot(Fit_Deforestation__6, main = "Deforestation 6")
-fancyRpartPlot(Fit_Deforestation__7, main = "Deforestation 7")
-
-fancyRpartPlot(Fit_Shifting.Agriculture__1, main = "Shifting Ag 1")
-fancyRpartPlot(Fit_Shifting.Agriculture__2, main = "Shifting Ag 2")
-fancyRpartPlot(Fit_Shifting.Agriculture__3, main = "Shifting Ag 3")
-fancyRpartPlot(Fit_Shifting.Agriculture__4, main = "Shifting Ag 4")
-fancyRpartPlot(Fit_Shifting.Agriculture__5, main = "Shifting Ag 5")
-fancyRpartPlot(Fit_Shifting.Agriculture__6, main = "Shifting Ag 6")
-fancyRpartPlot(Fit_Shifting.Agriculture__7, main = "Shifting Ag 7")
-
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__1, main = "Forestry 1")
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__2, main = "Forestry 2")
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__3, main = "Forestry 3")
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__4, main = "Forestry 4")
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__5, main = "Forestry 5")
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__6, main = "Forestry 6")
-fancyRpartPlot(Fit_TreeFarm.ForestryOther__7, main = "Forestry 7")
-
-fancyRpartPlot(Fit_Wildfire__1, main = "Wildfire 1")
-fancyRpartPlot(Fit_Wildfire__2, main = "Wildfire 2")
-fancyRpartPlot(Fit_Wildfire__3, main = "Wildfire 3")
-fancyRpartPlot(Fit_Wildfire__4, main = "Wildfire 4")
-fancyRpartPlot(Fit_Wildfire__5, main = "Wildfire 5")
-fancyRpartPlot(Fit_Wildfire__6, main = "Wildfire 6")
-fancyRpartPlot(Fit_Wildfire__7, main = "Wildfire 7")
-
-fancyRpartPlot(Fit_Urban__1, main = "Urban 1")
-fancyRpartPlot(Fit_Urban__2, main = "Urban 2")
-fancyRpartPlot(Fit_Urban__3, main = "Urban 3")
-fancyRpartPlot(Fit_Urban__4, main = "Urban 4")
-fancyRpartPlot(Fit_Urban__5, main = "Urban 5")
-fancyRpartPlot(Fit_Urban__6, main = "Urban 6")
-fancyRpartPlot(Fit_Urban__7, main = "Urban 7")
+# say("Plotting Decision Trees...")
+# 
+# fancyRpartPlot(Fit_Deforestation__1, main = "Deforestation 1")
+# fancyRpartPlot(Fit_Deforestation__2, main = "Deforestation 2")
+# fancyRpartPlot(Fit_Deforestation__3, main = "Deforestation 3")
+# fancyRpartPlot(Fit_Deforestation__4, main = "Deforestation 4")
+# fancyRpartPlot(Fit_Deforestation__5, main = "Deforestation 5")
+# fancyRpartPlot(Fit_Deforestation__6, main = "Deforestation 6")
+# fancyRpartPlot(Fit_Deforestation__7, main = "Deforestation 7")
+# 
+# fancyRpartPlot(Fit_Shifting.Agriculture__1, main = "Shifting Ag 1")
+# fancyRpartPlot(Fit_Shifting.Agriculture__2, main = "Shifting Ag 2")
+# fancyRpartPlot(Fit_Shifting.Agriculture__3, main = "Shifting Ag 3")
+# fancyRpartPlot(Fit_Shifting.Agriculture__4, main = "Shifting Ag 4")
+# fancyRpartPlot(Fit_Shifting.Agriculture__5, main = "Shifting Ag 5")
+# fancyRpartPlot(Fit_Shifting.Agriculture__6, main = "Shifting Ag 6")
+# fancyRpartPlot(Fit_Shifting.Agriculture__7, main = "Shifting Ag 7")
+# 
+# fancyRpartPlot(Fit_TreeFarm.ForestryOther__1, main = "Forestry 1")
+# fancyRpartPlot(Fit_TreeFarm.ForestryOther__2, main = "Forestry 2")
+# fancyRpartPlot(Fit_TreeFarm.ForestryOther__3, main = "Forestry 3")
+# fancyRpartPlot(Fit_TreeFarm.ForestryOther__4, main = "Forestry 4")
+# fancyRpartPlot(Fit_TreeFarm.ForestryOther__5, main = "Forestry 5")
+# fancyRpartPlot(Fit_TreeFarm.ForestryOther__6, main = "Forestry 6")
+# fancyRpartPlot(Fit_TreeFarm.ForestryOther__7, main = "Forestry 7")
+# 
+# fancyRpartPlot(Fit_Wildfire__1, main = "Wildfire 1")
+# fancyRpartPlot(Fit_Wildfire__2, main = "Wildfire 2")
+# fancyRpartPlot(Fit_Wildfire__3, main = "Wildfire 3")
+# fancyRpartPlot(Fit_Wildfire__4, main = "Wildfire 4")
+# fancyRpartPlot(Fit_Wildfire__5, main = "Wildfire 5")
+# fancyRpartPlot(Fit_Wildfire__6, main = "Wildfire 6")
+# fancyRpartPlot(Fit_Wildfire__7, main = "Wildfire 7")
+# 
+# fancyRpartPlot(Fit_Urban__1, main = "Urban 1")
+# fancyRpartPlot(Fit_Urban__2, main = "Urban 2")
+# fancyRpartPlot(Fit_Urban__3, main = "Urban 3")
+# fancyRpartPlot(Fit_Urban__4, main = "Urban 4")
+# fancyRpartPlot(Fit_Urban__5, main = "Urban 5")
+# fancyRpartPlot(Fit_Urban__6, main = "Urban 6")
+# fancyRpartPlot(Fit_Urban__7, main = "Urban 7")
 
 #-----
 
@@ -2146,8 +394,10 @@ fancyRpartPlot(Fit_Urban__7, main = "Urban 7")
 #ModelOutput.Final=read_csv("ModelOutput.Final_19.csv")
 say("Trees are voting on each pixel (this takes a while; it may be a good time to go get some coffee)...")
 
-temp=ModelOutput.Final_All%>%
-  select(Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)
+temp=ModelOutput.All%>%
+  select(Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)%>%
+  rename("out1" = "Output_Deforestation", "out2" = "Output_Shifting.Agriculture", "out3" = "Output_TreeFarm.ForestryOther",
+         "out4" = "Output_Wildfire", "out5" = "Output_Urban")
 test=as.data.frame(colnames(temp)[apply(temp,1,which.max)])
 names(test)=c("MaxClass")
 
@@ -2156,16 +406,24 @@ temp=temp%>%
 
 MaxClass=temp%>%
   rowwise()%>%
-  mutate(maxValue=max(Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban))
-MaxClass=MaxClass%>%
-  mutate(Class=ifelse(maxValue<.5,0,
-                      ifelse(MaxClass=="Output_Deforestation",1,
-                             ifelse(MaxClass=="Output_Shifting.Agriculture",2,
-                                    ifelse(MaxClass=="Output_TreeFarm.ForestryOther",3,
-                                           ifelse(MaxClass=="Output_Wildfire",4,
-                                                  ifelse(MaxClass=="Output_Urban",5,0)
-                                           ))))))
-MaxClass_Final_19_50uncertain=ModelOutput.Final_All%>%
+  mutate(maxValue=max(out1, out2, out3, out4, out5))
+
+MaxClass$MaxClass <- gsub("out", "", MaxClass$MaxClass)
+
+MaxClass <- within(MaxClass, MaxClass[maxValue < 0.5] <- 0)%>%
+  rename("Class" = "MaxClass")
+  
+MaxClass <- transform(MaxClass, Class = as.numeric(Class))
+
+# MaxClass=MaxClass%>%
+#   mutate(Class=ifelse(maxValue<.5,0,
+#                       ifelse(MaxClass=="Output_Deforestation",1,
+#                              ifelse(MaxClass=="Output_Shifting.Agriculture",2,
+#                                     ifelse(MaxClass=="Output_TreeFarm.ForestryOther",3,
+#                                            ifelse(MaxClass=="Output_Wildfire",4,
+#                                                   ifelse(MaxClass=="Output_Urban",5,0)
+#                                            ))))))
+MaxClass_Final_19_50uncertain=ModelOutput.All%>%
   select(GoodeR.ID)%>%
   bind_cols(MaxClass)%>%
   left_join(LossMaskFull,by = "GoodeR.ID")%>%
@@ -2175,72 +433,84 @@ MaxClass_Final_19_50uncertain=ModelOutput.Final_All%>%
   select(-Class2)%>%
   select(-Loss_10kMean_20002016)
 
-say("Outputting initial class selections to MaxClass_Final_19_50uncertain.csv")
-
-write_csv(MaxClass_Final_19_50uncertain,"MaxClass_Final_19_50uncertain.csv")
+# Disabling  this because it just creates the possibility of contamination from old data.  If the model is 
+# being run again, it's worth recalculating the secondary data, because presumably, something has changed.
+#
+# say("Outputting initial class selections to MaxClass_Final_19_50uncertain.csv")
+# 
+# write_csv(MaxClass_Final_19_50uncertain,"MaxClass_Final_19_50uncertain.csv")
 #----
 
 #--------------------------------------------------------
 # Initial raster 
 #--------------------------------------------------------
 
-#MaxClass_Final_19_50uncertain=read_csv("MaxClass_Final_19_50uncertain.csv")
-
 MaxClass_Final=MaxClass_Final_19_50uncertain%>%
   select(GoodeR.ID,Class)
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(MaxClass_Final,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Class)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
+
 
 say("Writing initial class selections to Goode_FinalClassification_19_50uncertain.tiff")
 
-writeRaster(r,filename="Goode_FinalClassification_19_50uncertain.tiff",type="GTIFF",overwrite=TRUE)
+rastOut(MaxClass_Final, "Goode_FinalClassification_19_50uncertain.tiff", "Class")
+
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(MaxClass_Final,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Class)
+# names(data)=c("GoodeR.ID","data")
+# data=distinct(data)
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
+
+# plot(r)
+
+#writeRaster(r,filename="Goode_FinalClassification_19_50uncertain.tiff",type="GTIFF",overwrite=TRUE)
 
 
 #---------------
 # prepare for expand in arcMap
 #---------------
 
-MaxClass_Final=MaxClass_Final_19_50uncertain%>%
-  select(GoodeR.ID,Class)%>%
-  filter(Class>0)
-data=1:6961896%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")%>%
-  left_join(MaxClass_Final,by="GoodeR.ID")%>%
-  select(GoodeR.ID,Class)
-names(data)=c("GoodeR.ID","data")
-data=distinct(data)
-list=data%>%
-  select(data)
-list=as.vector(t(list))
-m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-m=(t(m))
-r=raster(m)
-xmin(r)=-20037506.5672
-xmax(r)=20042493.4328
-ymin(r)=-8695798.3918
-ymax(r)=8674201.6082
-crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-plot(r)
+MaxClass_Final <- MaxClass_Final%>%
+  filter(Class > 0)
 
-writeRaster(r,filename="Goode_FinalClassification_19_Excludeduncertain.tif",type="GTIFF",overwrite=TRUE)
+rastOut(MaxClass_Final, "Goode_FinalClassification_19_Excludeduncertain.tif", "Class")
+
+# MaxClass_Final=MaxClass_Final_19_50uncertain%>%
+#   select(GoodeR.ID,Class)%>%
+#   filter(Class>0)
+# data=1:6961896%>%
+#   as.data.frame()%>%
+#   rename("GoodeR.ID"=".")%>%
+#   left_join(MaxClass_Final,by="GoodeR.ID")%>%
+#   select(GoodeR.ID,Class)
+# names(data)=c("GoodeR.ID","data")
+# data=distinct(data)
+# list=data%>%
+#   select(data)
+# list=as.vector(t(list))
+# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
+# m=(t(m))
+# r=raster(m)
+# xmin(r)=-20037506.5672
+# xmax(r)=20042493.4328
+# ymin(r)=-8695798.3918
+# ymax(r)=8674201.6082
+# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"
+
+# plot(r)
+
+# writeRaster(r,filename="Goode_FinalClassification_19_Excludeduncertain.tif",type="GTIFF",overwrite=TRUE)
 
 
 # Expand in ArcGIS
@@ -2258,18 +528,18 @@ pause()
 # Calculate % of loss classified (non-mixed/uncertain) #
 #-------------
 temp=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kSum_20002016)
-Total=sum(temp$Loss_10kSum_20002016)
+  select(!!c(1,41))
+Total=sum(temp[2])
 
 LossClassified=temp%>%
   left_join(MaxClass_Final_19_50uncertain,by="GoodeR.ID")%>%
   filter(Class!=0)
-LossClassified=sum(LossClassified$Loss_10kSum_20002016)/Total
+LossClassified=sum(LossClassified[2])/Total
 
 LossUnClassified=temp%>%
   left_join(MaxClass_Final_19_50uncertain,by="GoodeR.ID")%>%
   filter(Class==0)
-LossUnClassified=sum(LossUnClassified$Loss_10kSum_20002016)/Total
+LossUnClassified=sum(LossUnClassified[2])/Total
 
 say("")
 say(cat("Loss classified:", LossClassified, "%"))

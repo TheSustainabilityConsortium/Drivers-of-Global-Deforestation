@@ -427,11 +427,11 @@ MaxClass_Final_19_50uncertain=ModelOutput.All%>%
   select(GoodeR.ID)%>%
   bind_cols(MaxClass)%>%
   left_join(LossMaskFull,by = "GoodeR.ID")%>%
-  mutate(Class2=ifelse(as.numeric(Loss_10kMean_20002016)<.005,0,Class))%>%
+  mutate(Class2=ifelse(as.numeric(Loss)<.005,0,Class))%>%
   select(-Class)%>%
   mutate(Class=Class2)%>%
   select(-Class2)%>%
-  select(-Loss_10kMean_20002016)
+  select(-Loss)
 
 # Disabling  this because it just creates the possibility of contamination from old data.  If the model is 
 # being run again, it's worth recalculating the secondary data, because presumably, something has changed.

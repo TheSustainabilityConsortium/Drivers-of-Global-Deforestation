@@ -1,14 +1,29 @@
 #---------------
+# Settings #
+#---------------
+# set to true if you want the model to output all the decision trees
+rplots <- TRUE
+
+# set this to the directory you will run this script from
+setwd("E:/Forestry Model/")
+
+# set a repo to use for installing dependencies (repo list: https://cran.r-project.org/mirrors.html)
+repo = 'http://cran.us.r-project.org'
+
+
+#---------------
 # Load packages #
 #---------------
-# Packages needed
+# list dependencies
 package.list <- c("rgdal", "raster", "dplyr", "foreign", "tidyr", "readr", "stringr",
                   "rpart", "rpart.plot", "rattle", "crayon")
-# If the packages aren't installed, install them
+# if packages in package.list aren't installed, put their name in new.packages
 new.packages <- package.list[!(package.list %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages)
+# if new.packages has items in it, install them
+if(length(new.packages)) install.packages(new.packages, repos=repo)
 # Load the packages
 lapply(package.list, library, character.only = TRUE)
+
 
 #---------------
 # Define functions
@@ -59,8 +74,6 @@ rastOut <- function(df, filename, column) {
 #---------------
 # Set up workspace #
 #---------------
-setwd("E:/Forestry Model/clean/")
-
 sub_dir1 <- "Temp_RModelOutputsTiffs"
 sub_dir2 <- "R_FinalOutputs"
 temp_dir1 <- file.path(getwd(), sub_dir1)

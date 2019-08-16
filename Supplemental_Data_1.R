@@ -26,12 +26,12 @@ pause <- function() {
 
 # writes 'words' to terminal in green letters and makes a new line
 say <- function(words){
-  cat(green(words),"\n")
+  cat(words,"\n")
 }
 
 # writes 'words' to the terminal in red letters and makes a new line
 bad <- function(words){
-  cat(red(words),"\n")
+  cat(words,"\n")
 }
 
 # df is a dataframe with minimum of GoodeR.ID and 1 data column, filename and column are char strings

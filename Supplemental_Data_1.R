@@ -282,7 +282,8 @@ driverNames <- c("Deforestation", "Shifting.Agriculture", "TreeFarm.ForestryOthe
 drivers <- c(1, 2, 3, 4, 5)
 ModelOutput <- list()
 ModelOutput.Regional <- list()
-regionalOutputs <- list()
+if (rplots){pdf(paste(sub_dir2,'DecisionTrees.pdf',sep='/'))}
+#regionalOutputs <- list()
 
 
 for (region in regions){
@@ -308,7 +309,11 @@ for (region in regions){
     fit=prune(fit,cp=.02)
     
     # plot the tree and give it a title of 'Region: Driver'
-    fancyRpartPlot(fit, main = paste("Region", region, ":", driverNames[driver], sep = " "))
+    if (rplots){
+      name <- paste("Region", region, ":", driverNames[driver], sep = " ")
+      fancyRpartPlot(fit, main = name)
+    }
+    #cat(name)
     
     # generate name for model output field
     outName <- paste("Output", driverNames[driver], sep = "_")
@@ -320,8 +325,8 @@ for (region in regions){
       left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
       # the "!! outName :=" uses the variable value as the new column name, rather than the literal string 'outName'
       mutate(!!outName := predict(fit, type="vector", newdata=GoodeR_SecondaryData))%>%
-      filter(Region==paste(region))%>%
-      select(-Region)
+      filter(Region==paste(region))#%>%
+      #select(-Region)
   }
   # Collect class probabilities from each tree in ModelOutput.Full
   ModelOutput.Regional[[region]] <- as.data.frame(Reduce(function(x, y) merge(x, y, by="GoodeR.ID", all.x=TRUE), ModelOutput))
@@ -331,74 +336,11 @@ for (region in regions){
   say("********************")
 }
 
+# Close and write pdf to file
+if (rplots){dev.off()}
+
 # Combine all regions into the final table
 ModelOutput.All <- Reduce(function(x, y) bind_rows(x, y), ModelOutput.Regional)
-
-#-----------------------
-# Combine into final output list #
-#-----------------------
-# say("")
-# say("Combining Regions...")
-# 
-# ModelOutput.Final_All=ModelOutput.Final__1%>%
-#   bind_rows(ModelOutput.Final__2)%>%
-#   bind_rows(ModelOutput.Final__3)%>%
-#   bind_rows(ModelOutput.Final__4)%>%
-#   bind_rows(ModelOutput.Final__5)%>%
-#   bind_rows(ModelOutput.Final__6)%>%
-#   bind_rows(ModelOutput.Final__7)
-# 
-# say("Writing raw model output to ModelOutput.Final_19.csv")
-# 
-# write_csv(ModelOutput.Final_All,"ModelOutput.Final_19.csv")
-#------
-
-#---------------
-# view decision tree Rplots
-#---------------
-# say("Plotting Decision Trees...")
-# 
-# fancyRpartPlot(Fit_Deforestation__1, main = "Deforestation 1")
-# fancyRpartPlot(Fit_Deforestation__2, main = "Deforestation 2")
-# fancyRpartPlot(Fit_Deforestation__3, main = "Deforestation 3")
-# fancyRpartPlot(Fit_Deforestation__4, main = "Deforestation 4")
-# fancyRpartPlot(Fit_Deforestation__5, main = "Deforestation 5")
-# fancyRpartPlot(Fit_Deforestation__6, main = "Deforestation 6")
-# fancyRpartPlot(Fit_Deforestation__7, main = "Deforestation 7")
-# 
-# fancyRpartPlot(Fit_Shifting.Agriculture__1, main = "Shifting Ag 1")
-# fancyRpartPlot(Fit_Shifting.Agriculture__2, main = "Shifting Ag 2")
-# fancyRpartPlot(Fit_Shifting.Agriculture__3, main = "Shifting Ag 3")
-# fancyRpartPlot(Fit_Shifting.Agriculture__4, main = "Shifting Ag 4")
-# fancyRpartPlot(Fit_Shifting.Agriculture__5, main = "Shifting Ag 5")
-# fancyRpartPlot(Fit_Shifting.Agriculture__6, main = "Shifting Ag 6")
-# fancyRpartPlot(Fit_Shifting.Agriculture__7, main = "Shifting Ag 7")
-# 
-# fancyRpartPlot(Fit_TreeFarm.ForestryOther__1, main = "Forestry 1")
-# fancyRpartPlot(Fit_TreeFarm.ForestryOther__2, main = "Forestry 2")
-# fancyRpartPlot(Fit_TreeFarm.ForestryOther__3, main = "Forestry 3")
-# fancyRpartPlot(Fit_TreeFarm.ForestryOther__4, main = "Forestry 4")
-# fancyRpartPlot(Fit_TreeFarm.ForestryOther__5, main = "Forestry 5")
-# fancyRpartPlot(Fit_TreeFarm.ForestryOther__6, main = "Forestry 6")
-# fancyRpartPlot(Fit_TreeFarm.ForestryOther__7, main = "Forestry 7")
-# 
-# fancyRpartPlot(Fit_Wildfire__1, main = "Wildfire 1")
-# fancyRpartPlot(Fit_Wildfire__2, main = "Wildfire 2")
-# fancyRpartPlot(Fit_Wildfire__3, main = "Wildfire 3")
-# fancyRpartPlot(Fit_Wildfire__4, main = "Wildfire 4")
-# fancyRpartPlot(Fit_Wildfire__5, main = "Wildfire 5")
-# fancyRpartPlot(Fit_Wildfire__6, main = "Wildfire 6")
-# fancyRpartPlot(Fit_Wildfire__7, main = "Wildfire 7")
-# 
-# fancyRpartPlot(Fit_Urban__1, main = "Urban 1")
-# fancyRpartPlot(Fit_Urban__2, main = "Urban 2")
-# fancyRpartPlot(Fit_Urban__3, main = "Urban 3")
-# fancyRpartPlot(Fit_Urban__4, main = "Urban 4")
-# fancyRpartPlot(Fit_Urban__5, main = "Urban 5")
-# fancyRpartPlot(Fit_Urban__6, main = "Urban 6")
-# fancyRpartPlot(Fit_Urban__7, main = "Urban 7")
-
-#-----
 
 #---------------
 #Create initial classification using model output

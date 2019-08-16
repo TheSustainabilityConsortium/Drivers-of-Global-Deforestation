@@ -175,11 +175,11 @@ say("If all inputs look good, press Enter, if any failed, press Ctrl+C then Ente
 pause()
 
 say("Calculating Training Points")
-temp=as.data.frame(c(1:nrow(TrainingPoints)))
-names(temp)=c("TrainingID")
+TrainingIDs=as.data.frame(c(1:nrow(TrainingPoints)))
+names(TrainingIDs)=c("TrainingID")
 # Make columns for each driver (1 is that class, 0 is not that class)
 TrainingPoints=TrainingPoints%>%
-  bind_cols(temp)%>%
+  bind_cols(TrainingIDs)%>%
   mutate(Deforestation=ifelse(Training.Class==1,1,0))%>%
   mutate(Shifting.Agriculture=ifelse(Training.Class==2,1,0))%>%
   mutate(TreeFarm.ForestryOther=ifelse(Training.Class==3,1,0))%>%
@@ -187,7 +187,7 @@ TrainingPoints=TrainingPoints%>%
   mutate(Urban=ifelse(Training.Class==5,1,0))
 
 
-TrainingPoints_PrimaryData=TrainingPoints%>%
+TrainingPoints_PrimaryData=TrainingPoints%>% # this isn't filtering out class 6 (flooding?)
   filter(Training.Class!=7)
 #activate this
 #write_csv(TrainingPoints,"TrainingPoints19.csv")
@@ -215,12 +215,6 @@ for(NAME in FileList$FileName){
 TrainingPoints_PrimaryData[is.na(TrainingPoints_PrimaryData)]=0
 TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
   distinct()
-  
-  # Disabling this because it just creates the possibility of contamination from old data.  If the model is 
-  # being run again, it's worth recalculating the secondary data, because presumably, something has changed.
-  #
-  # say("Writing TrainingPoints_PrimaryData.csv to working directory...")
-  # write_csv(TrainingPoints_PrimaryData,"TrainingPoints_PrimaryData.csv")
 
 #---------------
 # Create full list of Secondary Data #
@@ -264,12 +258,6 @@ GoodeR_SecondaryData=GoodeR_SecondaryData%>%
   left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")
 GoodeR_SecondaryData=GoodeR_SecondaryData%>%
    filter(!is.na(Region))
-
-# Disabling this because it just creates the possibility of contamination from old data.  If the model is 
-# being run again, it's worth recalculating the secondary data, because presumably, something has changed.
-#
-# say("Writing GoodeR_SecondaryData.csv to working directory...")
-# write_csv(GoodeR_SecondaryData, "./GoodeR_SecondaryData.csv")
 
 #----
 
@@ -349,25 +337,27 @@ ModelOutput.All <- Reduce(function(x, y) bind_rows(x, y), ModelOutput.Regional)
 #ModelOutput.Final=read_csv("ModelOutput.Final_19.csv")
 say("Trees are voting on each pixel (this takes a while; it may be a good time to go get some coffee)...")
 
+# make column names machine readable
 temp=ModelOutput.All%>%
   select(Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)%>%
   rename("out1" = "Output_Deforestation", "out2" = "Output_Shifting.Agriculture", "out3" = "Output_TreeFarm.ForestryOther",
          "out4" = "Output_Wildfire", "out5" = "Output_Urban")
+# get max value for cell
 test=as.data.frame(colnames(temp)[apply(temp,1,which.max)])
 names(test)=c("MaxClass")
-
+# reattach assigned drivers to full output list
 temp=temp%>%
   bind_cols(test)
-
+# Add column for the confidence of the top driver
 MaxClass=temp%>%
   rowwise()%>%
   mutate(maxValue=max(out1, out2, out3, out4, out5))
-
+# drop 'out' from $MaxClass column, leaving just numbers
 MaxClass$MaxClass <- gsub("out", "", MaxClass$MaxClass)
-
+# eliminate any cells whose top score was <50% by setting their value to 0
 MaxClass <- within(MaxClass, MaxClass[maxValue < 0.5] <- 0)%>%
   rename("Class" = "MaxClass")
-  
+# convert columns to numeric type
 MaxClass <- transform(MaxClass, Class = as.numeric(Class))
 
 # MaxClass=MaxClass%>%
@@ -408,29 +398,6 @@ say("Writing initial class selections to Goode_FinalClassification_19_50uncertai
 
 rastOut(MaxClass_Final, "Goode_FinalClassification_19_50uncertain.tiff", "Class")
 
-# data=1:6961896%>%
-#   as.data.frame()%>%
-#   rename("GoodeR.ID"=".")%>%
-#   left_join(MaxClass_Final,by="GoodeR.ID")%>%
-#   select(GoodeR.ID,Class)
-# names(data)=c("GoodeR.ID","data")
-# data=distinct(data)
-# list=data%>%
-#   select(data)
-# list=as.vector(t(list))
-# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-# m=(t(m))
-# r=raster(m)
-# xmin(r)=-20037506.5672
-# xmax(r)=20042493.4328
-# ymin(r)=-8695798.3918
-# ymax(r)=8674201.6082
-# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +" 
-
-# plot(r)
-
-#writeRaster(r,filename="Goode_FinalClassification_19_50uncertain.tiff",type="GTIFF",overwrite=TRUE)
-
 
 #---------------
 # prepare for expand in arcMap
@@ -441,31 +408,6 @@ MaxClass_Final <- MaxClass_Final%>%
 
 rastOut(MaxClass_Final, "Goode_FinalClassification_19_Excludeduncertain.tif", "Class")
 
-# MaxClass_Final=MaxClass_Final_19_50uncertain%>%
-#   select(GoodeR.ID,Class)%>%
-#   filter(Class>0)
-# data=1:6961896%>%
-#   as.data.frame()%>%
-#   rename("GoodeR.ID"=".")%>%
-#   left_join(MaxClass_Final,by="GoodeR.ID")%>%
-#   select(GoodeR.ID,Class)
-# names(data)=c("GoodeR.ID","data")
-# data=distinct(data)
-# list=data%>%
-#   select(data)
-# list=as.vector(t(list))
-# m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-# m=(t(m))
-# r=raster(m)
-# xmin(r)=-20037506.5672
-# xmax(r)=20042493.4328
-# ymin(r)=-8695798.3918
-# ymax(r)=8674201.6082
-# crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"
-
-# plot(r)
-
-# writeRaster(r,filename="Goode_FinalClassification_19_Excludeduncertain.tif",type="GTIFF",overwrite=TRUE)
 
 
 # Expand in ArcGIS

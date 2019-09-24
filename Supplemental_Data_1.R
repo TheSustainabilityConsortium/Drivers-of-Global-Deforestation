@@ -285,6 +285,8 @@ drivers <- c(1, 2, 3, 4, 5)
 ModelOutput <- list()
 ModelOutput.Regional <- list()
 if (rplots){pdf(paste(sub_dir2,'DecisionTrees.pdf',sep='/'))}
+importance <- data.frame(matrix(vector(), ncol=length(PrimaryVariables$Name)))
+names(importance) <- PrimaryVariables$Name
 #regionalOutputs <- list()
 
 
@@ -314,6 +316,7 @@ for (region in regions){
     if (rplots){
       name <- paste("Region", region, ":", driverNames[driver], sep = " ")
       fancyRpartPlot(fit, main = name)
+      importance <- bind_rows(importance, fit$variable.importance)
     }
     #cat(name)
     
@@ -344,6 +347,12 @@ if (rplots){dev.off()}
 # Combine all regions into the final table
 ModelOutput.All <- Reduce(function(x, y) bind_rows(x, y), ModelOutput.Regional)%>%
   left_join(GoodeR_Boundaries_Region, by='GoodeR.ID')
+
+# combine scores for variable importance and write to file
+Total.Importance <- summarise_each(importance, list(~ sum(., na.rm = TRUE)))
+say("Writing variable importance")
+write_csv(Total.Importance, paste(sub_dir2, "Variable.Importance.csv", sep = '/'))
+
 
 #---------------
 #Create initial classification using model output

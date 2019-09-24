@@ -63,10 +63,10 @@ rastOut <- function(df, filename, column) {
   m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
   m=(t(m))
   r=raster(m)
-  xmin(r)=-20037506.5672
+  xmin(r)=-20037506.5671
   xmax(r)=20042493.4328
-  ymin(r)=-8695798.3918
-  ymax(r)=8674201.6082
+  ymin(r)=-8683205.0209
+  ymax(r)=8686794.9791
   crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"
   writeRaster(r,filename=filename,type="GTIFF",overwrite=TRUE)
 }

@@ -138,16 +138,30 @@ if (TRUE %in% (list.files() == 'TrainingPoints_PrimaryData.csv')) {
   say("Training Points Primary Data not found in workspace.  It will be calculated.")
 }
 
-# Get list of secondary data files
-FileList=as.data.frame(list.files(path = "./R_ModelInputs_SecondaryData",
+# Get list of primary data files
+PrimaryFileList=as.data.frame(list.files(path = "./R_ModelInputs_PrimaryData",
                                   pattern = ".tif$", all.files = FALSE,
                                   full.names = FALSE, recursive = FALSE,
                                   ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE))
-names(FileList)=c("FileName")
-Variables <- FileList
-names(Variables)=c("Name")
+names(PrimaryFileList)=c("FileName")
+PrimaryVariables <- PrimaryFileList
+names(PrimaryVariables)=c("Name")
 # Strip file prefixes and suffixes
-Variables$Name <- Variables$Name %>%
+PrimaryVariables$Name <- PrimaryVariables$Name %>%
+  str_replace("Goode_","") %>%
+  str_replace(".tif","")
+
+# Get list of secondary data files
+SecondaryFileList=as.data.frame(list.files(path = "./R_ModelInputs_SecondaryData",
+                                           pattern = ".tif$", all.files = FALSE,
+                                           full.names = FALSE, recursive = FALSE,
+                                           ignore.case = FALSE, include.dirs = FALSE,
+                                           no.. = FALSE))
+names(SecondaryFileList)=c("FileName")
+SecondaryVariables <- SecondaryFileList
+names(SecondaryVariables) = c("Name")
+# Strip file prefix and suffix
+SecondaryVariables$Name <- SecondaryVariables$Name %>%
   str_replace("Goode_","") %>%
   str_replace(".tif","")
 
@@ -157,8 +171,8 @@ Variables$Name <- Variables$Name %>%
   
 say("Checking inputs for TrainingPoints_PrimaryData...")
 
-for(NAME in FileList$FileName){
-  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
+for(NAME in PrimaryFileList$FileName){
+  data=raster(paste("./R_ModelInputs_PrimaryData/",NAME,sep=""))
   
   if(nrow(data)!=1737){
     bad(c(NAME, "has a problem"))
@@ -192,9 +206,9 @@ TrainingPoints_PrimaryData=TrainingPoints%>% # this isn't filtering out class 6 
 #activate this
 #write_csv(TrainingPoints,"TrainingPoints19.csv")
 
-for(NAME in FileList$FileName){
+for(NAME in PrimaryFileList$FileName){
   say(c("Reading", NAME))
-  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
+  data=raster(paste("./R_ModelInputs_PrimaryData/",NAME,sep=""))
   NAME2=NAME%>%
     str_replace("^Goode_", "")%>%
     str_replace(".tif$", "")
@@ -232,7 +246,7 @@ GoodeR_SecondaryData=GoodeR_SecondaryData%>%
   left_join(tppd,by="GoodeR.ID")
 GoodeR_SecondaryData$TrainingID[is.na(GoodeR_SecondaryData$TrainingID)]=0
 
-for(NAME in FileList$FileName){
+for(NAME in SecondaryFileList$FileName){
   
   data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
   
@@ -290,10 +304,10 @@ for (region in regions){
     say(c("Calculating",driverNames[driver],"Tree..."))
     
     # select the column for the current driver, then all variable columns
-    InputData <- select(TrainingPoints_Regional,driverNames[driver],Variables$Name[1]:Variables$Name[length(Variables$Name)])
+    InputData <- select(TrainingPoints_Regional,driverNames[driver],PrimaryVariables$Name[1]:PrimaryVariables$Name[length(PrimaryVariables$Name)])
     
     # give rpart a formula where the current driver is defined as the sum of all variables in Variables$Name, pass InputData and define method
-    fit <- rpart(as.formula(paste(paste(driverNames[driver],"~",sep=""),paste(Variables$Name, collapse="+"))),data=InputData,method = "anova")
+    fit <- rpart(as.formula(paste(paste(driverNames[driver],"~",sep=""),paste(PrimaryVariables$Name, collapse="+"))),data=InputData,method = "anova")
     fit=prune(fit,cp=.02)
     
     # plot the tree and give it a title of 'Region: Driver'
@@ -313,8 +327,8 @@ for (region in regions){
       left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
       # the "!! outName :=" uses the variable value as the new column name, rather than the literal string 'outName'
       mutate(!!outName := predict(fit, type="vector", newdata=GoodeR_SecondaryData))%>%
-      filter(Region==paste(region))#%>%
-      #select(-Region)
+      filter(Region==paste(region))%>%
+      select(-Region)
   }
   # Collect class probabilities from each tree in ModelOutput.Full
   ModelOutput.Regional[[region]] <- as.data.frame(Reduce(function(x, y) merge(x, y, by="GoodeR.ID", all.x=TRUE), ModelOutput))

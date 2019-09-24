@@ -342,14 +342,15 @@ for (region in regions){
 if (rplots){dev.off()}
 
 # Combine all regions into the final table
-ModelOutput.All <- Reduce(function(x, y) bind_rows(x, y), ModelOutput.Regional)
+ModelOutput.All <- Reduce(function(x, y) bind_rows(x, y), ModelOutput.Regional)%>%
+  left_join(GoodeR_Boundaries_Region, by='GoodeR.ID')
 
 #---------------
 #Create initial classification using model output
 #---------------
 
 #ModelOutput.Final=read_csv("ModelOutput.Final_19.csv")
-say("Trees are voting on each pixel (this takes a while; it may be a good time to go get some coffee)...")
+say("Trees are voting on each pixel...")
 
 # make column names machine readable
 temp=ModelOutput.All%>%
@@ -373,6 +374,16 @@ MaxClass <- within(MaxClass, MaxClass[maxValue < 0.5] <- 0)%>%
   rename("Class" = "MaxClass")
 # convert columns to numeric type
 MaxClass <- transform(MaxClass, Class = as.numeric(Class))
+
+ModelOutput.All <- ModelOutput.All %>%
+  bind_cols(MaxClass) %>%
+  select(-out1, -out2, -out3, -out4, -out5)
+
+by_region <- ModelOutput.All %>% group_by(Region)
+by_region %>% summarise(
+  
+)
+write_csv(ModelOutput.All, paste(sub_dir2,"ModelOutput.All.csv",sep='/'))
 
 # MaxClass=MaxClass%>%
 #   mutate(Class=ifelse(maxValue<.5,0,

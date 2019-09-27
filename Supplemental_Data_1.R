@@ -389,9 +389,7 @@ ModelOutput.All <- ModelOutput.All %>%
   select(-out1, -out2, -out3, -out4, -out5)
 
 by_region <- ModelOutput.All %>% group_by(Region)
-by_region %>% summarise(
-  
-)
+
 write_csv(ModelOutput.All, paste(sub_dir2,"ModelOutput.All.csv",sep='/'))
 
 # MaxClass=MaxClass%>%

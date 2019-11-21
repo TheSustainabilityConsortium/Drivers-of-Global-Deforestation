@@ -1,5 +1,6 @@
 # Forestry-Model
 This is the driver classification model referenced in [Curtis et al. 2018, Classifying Drivers of Global Forest Loss](https://science.sciencemag.org/content/361/6407/1108.editor-summary)
+
 Modifications have been made to the code published with the article to make it more user-friendly, and it is being actively maintained and updated as new information becomes available.
 
 ## How to run the model

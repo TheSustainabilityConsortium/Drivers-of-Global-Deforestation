@@ -12,6 +12,6 @@ Modifications have been made to the code published with the article to make it m
   - Copy the contents of R_ModelInputs_PrimaryData into R_ModelInputs_SecondaryData, overwriting the contents of R_ModelInputs_SecondaryData.
   - Download [this](https://thetsc-my.sharepoint.com/:i:/g/personal/forrest_follett_sustainabilityconsortium_org/ER9A5EQMcttDl8AC2gpYEGAB2oTixKXOxfAT9IHSqX4QsA?e=Pas2UM) 2015 version of the LossMask005.tif file and use it to overwrite the version that you cloned from this repo in your working directory.
 
-4. Open Supplemental_Data_1.R and find the heading titled 'Set up workspace'. Edit the line that calls the function setwd() and put the path of your working directory in the parenthesis.  Be sure to use quotation marks. For example: setwd("C:/ForestLossModel/")
+4. Open Supplemental_Data_1.R and look under the heading titled 'Settings'. Edit the line that calls the function setwd() and put the path of your working directory in the parenthesis.  Be sure to use quotation marks. For example: setwd("C:/ForestLossModel/")
 
 5. Run the script from a terminal with the command: Rscript Supplemental_Data_1.R

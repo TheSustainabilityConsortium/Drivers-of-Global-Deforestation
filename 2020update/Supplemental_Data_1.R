@@ -5,7 +5,7 @@
 rplots <- TRUE
 
 # set this to the directory you will run this script from
-setwd("C:/Users/james.maccarthy/Documents/Documents/Git/Drivers-of-Global-Deforestation/2020update/")
+setwd("C:/Users/james.maccarthy/OneDrive - World Resources Institute/Documents/Git/Drivers-of-Global-Deforestation/2020update")
 
 # set a repo to use for installing dependencies (repo list: https://cran.r-project.org/mirrors.html)
 repo = 'http://cran.us.r-project.org'
@@ -130,6 +130,12 @@ makeLossMask <- function(loss_data) {
   write.csv(df, 'LossMaskFull_2020.csv', row.names=F)
 }
 
+
+# see function definition above (only need to be done once)
+# fixes the extent of input layers so they can be used in model
+fixExtent()
+
+
 makeLossMask('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif')
 writeRaster(
   x = raster('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif'),
@@ -186,7 +192,7 @@ GoodeR=1:6961896%>%
 
 # see function definition above (only need to be done once)
 # fixes the extent of input layers so they can be used in model
-fixExtent()
+# fixExtent()
 
 # Optional:
 # Look for GoodeR_SecondaryData in workspace.  Import or notify user it is missing.

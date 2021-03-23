@@ -49,6 +49,55 @@ bad <- function(words){
   cat(words,"\n")
 }
 
+# delete extraneous files created by arcgis
+# used in fixExtent function
+cleanInput <- function(input_dir){
+  cat('Cleaning raw input files...')
+  filelist <- dir(input_dir, full.names = TRUE)
+  rm.list <- filelist[!endsWith(filelist, '.tif')]
+  file.remove(rm.list)
+  say('done')
+}
+
+# this function does three things:
+# - deletes extraneous files created by arcgis (using cleanInput function)
+# - extends or crops files to the correct extent so they can be used in model
+# - copies files from the raw_input folder to the primary data folder
+fixExtent <- function(raw_input_dir='./Raw_Input',
+                      primary_data_dir='./R_ModelInputs_PrimaryData') {
+  EXTENT = extent(raster('Goode_LossMask005.tif'))
+  cleanInput(raw_input_dir)
+  filelist <- dir(
+    path = raw_input_dir,
+    pattern = '.tif',
+    full.names = T
+  )
+  for(file in filelist){
+    r = raster(file)
+    fn <- tail(strsplit(file, '/')[[1]], 1)
+    out_name <- paste(primary_data_dir, fn, sep='/')
+    if(nrow(r) < 1737){
+      bad(c('File (', fn, ') does not match reference extent...'))
+      #file.archive(file)
+      cat('Extending and saving raster...')
+      r <- extend(r, EXTENT)
+      writeRaster(r, out_name, overwrite=TRUE)
+      say('done')
+    } else if(nrow(r) > 1737){
+      bad(c('File (', fn, ') does not match reference extent...'))
+      #file.archive(file)
+      cat('Cropping and saving raster...')
+      r <- crop(r, EXTENT)
+      writeRaster(r, out_name, overwrite=TRUE)
+      say('done')
+    } else {
+      cat('Saving raster...')
+      file.copy(file, out_name)
+      say('done')
+    }
+  }
+}
+
 # df is a dataframe with minimum of GoodeR.ID and 1 data column, filename and column are char strings
 rastOut <- function(df, filename, column) {
   data=1:6961896%>%
@@ -70,6 +119,28 @@ rastOut <- function(df, filename, column) {
   crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"
   writeRaster(r,filename=filename,type="GTIFF",overwrite=TRUE)
 }
+
+
+makeLossMask <- function(loss_data) {
+  r <- raster(loss_data)
+  df <- data.frame(
+    GoodeR.ID=1:6961896,
+    Loss=as.vector(r)
+  )
+  write.csv(df, 'LossMaskFull_2020.csv', row.names=F)
+}
+
+
+# see function definition above (only need to be done once)
+# fixes the extent of input layers so they can be used in model
+fixExtent()
+
+
+makeLossMask('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif')
+writeRaster(
+  x = raster('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif'),
+  filename = './Goode'
+)
 
 #---------------
 # Set up workspace #
@@ -113,11 +184,15 @@ GoodeR_Boundaries_Region=read_csv("GoodeR_Boundaries_Region.csv", col_types = co
 say("Reading Training Points...")
 TrainingPoints = read_csv("TrainingPointsFull.csv", col_types = cols(GoodeR.ID = col_integer(), Training.Class = col_integer()))
 say("Reading Loss Mask...")
-LossMaskFull= read_csv("LossMaskFull.csv", col_types = cols(col_integer(), col_number()))
+LossMaskFull= read_csv("LossMaskFull_2020.csv", col_types = cols(col_integer(), col_number()))
 GoodeR=1:6961896%>%
   as.vector()%>%
   as.data.frame()%>%
   rename("GoodeR.ID"=".")
+
+# see function definition above (only need to be done once)
+# fixes the extent of input layers so they can be used in model
+# fixExtent()
 
 # Optional:
 # Look for GoodeR_SecondaryData in workspace.  Import or notify user it is missing.
@@ -250,7 +325,7 @@ for(NAME in SecondaryFileList$FileName){
   
   data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
   
-  say(c("Reading ", NAME))
+  say(c("Reading", NAME))
   
   NAME2=NAME%>%
     str_replace("^Goode_", "")%>%
@@ -309,7 +384,16 @@ for (region in regions){
     InputData <- select(TrainingPoints_Regional,driverNames[driver],PrimaryVariables$Name[1]:PrimaryVariables$Name[length(PrimaryVariables$Name)])
     
     # give rpart a formula where the current driver is defined as the sum of all variables in Variables$Name, pass InputData and define method
-    fit <- rpart(as.formula(paste(paste(driverNames[driver],"~",sep=""),paste(PrimaryVariables$Name, collapse="+"))),data=InputData,method = "anova")
+    fit <- rpart(
+      as.formula(
+        paste(
+          paste(driverNames[driver],"~",sep=""),
+          paste(PrimaryVariables$Name, collapse="+")
+        )
+      ),
+      data=InputData,
+      method = "anova"
+    )
     fit=prune(fit,cp=.02)
     
     # plot the tree and give it a title of 'Region: Driver'

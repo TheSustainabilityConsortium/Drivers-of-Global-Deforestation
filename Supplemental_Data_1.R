@@ -136,11 +136,11 @@ makeLossMask <- function(loss_data) {
 #fixExtent()
 
 
-makeLossMask('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif')
-writeRaster(
-  x = raster('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif'),
-  filename = './Goode'
-)
+#makeLossMask('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif')
+#writeRaster(
+#  x = raster('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif'),
+#  filename = './Goode_Lossmask_output'
+#)
 
 #---------------
 # Set up workspace #

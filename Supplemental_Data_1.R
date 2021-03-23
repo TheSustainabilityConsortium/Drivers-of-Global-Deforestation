@@ -133,7 +133,7 @@ makeLossMask <- function(loss_data) {
 
 # see function definition above (only need to be done once)
 # fixes the extent of input layers so they can be used in model
-fixExtent()
+#fixExtent()
 
 
 makeLossMask('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif')

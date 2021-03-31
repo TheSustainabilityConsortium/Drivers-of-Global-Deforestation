@@ -4,3 +4,5 @@ Temp_RModelOutputsTiffs/
 R_FinalOutputs/
 .ipynb_checkpoints/Supplemental_Data_1-checkpoint.ipynb
 /2020update/Python
+**/.RData
+**/.Rhistory

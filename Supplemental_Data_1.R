@@ -5,7 +5,7 @@
 rplots <- TRUE
 
 # set this to the directory you will run this script from
-setwd("E:/Forestry Model/")
+setwd("C:/Users/james.maccarthy/OneDrive - World Resources Institute/Documents/Git/Drivers-of-Global-Deforestation")
 
 # set a repo to use for installing dependencies (repo list: https://cran.r-project.org/mirrors.html)
 repo = 'http://cran.us.r-project.org'
@@ -136,11 +136,15 @@ makeLossMask <- function(loss_data) {
 #fixExtent()
 
 
+<<<<<<< HEAD
+makeLossMask('./R_ModelInputs_SecondaryData/Goode_Loss_10kMean.tif')
+=======
 #makeLossMask('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif')
 #writeRaster(
 #  x = raster('./R_ModelInputs_PrimaryData/Goode_Loss_10kMean.tif'),
 #  filename = './Goode_Lossmask_output'
 #)
+>>>>>>> 4adceb9f584bde9a1c2c71cdc56f7a8f934144f8
 
 #---------------
 # Set up workspace #
@@ -506,7 +510,7 @@ MaxClass_Final_19_50uncertain=ModelOutput.All%>%
 # Initial raster 
 #--------------------------------------------------------
 
-MaxClass_Final=MaxClass_Final_19_50uncertain%>%
+MaxClass_Final=MaxClass_Final_20_50uncertain%>%
   select(GoodeR.ID,Class)
 
 
@@ -565,7 +569,7 @@ say("")
 # Re-import Expanded classes (no Uncertain class) mask out areas with loss less than 0.5% loss
 #-----------------------------------------
 
-data=raster("R_FinalOutputs/Goode_FinalClassification_19_50uncertain_expanded_05pcnt.tif")
+data=raster("R_FinalOutputs/Goode_FinalClassification_20_50uncertain_expanded_05pcnt.tif")
 data=as.vector(data)%>%
   as.data.frame()
 names(data)=c("Class")

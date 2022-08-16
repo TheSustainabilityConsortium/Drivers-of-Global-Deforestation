@@ -7,20 +7,22 @@ rplots <- TRUE
 # set this to the directory you will run this script from
 setwd("E:/Forestry Model/")
 
-# set a repo to use for installing dependencies (repo list: https://cran.r-project.org/mirrors.html)
-repo = 'http://cran.us.r-project.org'
+# set a repo to use for installing dependencies
+# (repo list: https://cran.r-project.org/mirrors.html)
+repo <- "http://cran.us.r-project.org"
 
 
 #---------------
 # Load packages #
 #---------------
 # list dependencies
-package.list <- c("rgdal", "raster", "dplyr", "foreign", "tidyr", "readr", "stringr",
-                  "rpart", "rpart.plot", "rattle", "crayon")
+package_list <- c("rgdal", "raster", "dplyr", "foreign", "tidyr", "readr",
+                 "stringr", "rpart", "rpart.plot", "rattle", "crayon")
 # if packages in package.list aren't installed, put their name in new.packages
-new.packages <- package.list[!(package.list %in% installed.packages()[,"Package"])]
+new_packages <- package.list[
+  !(package_list %in% installed.packages()[, "Package"])]
 # if new.packages has items in it, install them
-if(length(new.packages)) install.packages(new.packages, repos=repo)
+if (length(new.packages)) install.packages(new.packages, repos = repo)
 # Load the packages
 lapply(package.list, library, character.only = TRUE)
 
@@ -29,10 +31,9 @@ lapply(package.list, library, character.only = TRUE)
 # Define functions
 #---------------
 pause <- function() {
-  if (interactive()){
-    line <- invisible(readline(prompt="Press [enter] to continue..."))
-  }
-  else {
+  if (interactive()) {
+    line <- invisible(readline(prompt = "Press [enter] to continue..."))
+  } else {
     cat("Press <Enter> to continue...")
     invisible(readLines(file("stdin"), 1))
     close(file("stdin"))
@@ -40,35 +41,38 @@ pause <- function() {
 }
 
 # writes 'words' to terminal in green letters and makes a new line
-say <- function(words){
-  cat(words,"\n")
+say <- function(words) {
+  cat(words, "\n")
 }
 
 # writes 'words' to the terminal in red letters and makes a new line
-bad <- function(words){
-  cat(words,"\n")
+bad <- function(words) {
+  cat(words, "\n")
 }
 
-# df is a dataframe with minimum of GoodeR.ID and 1 data column, filename and column are char strings
-rastOut <- function(df, filename, column) {
-  data=1:6961896%>%
-    as.data.frame()%>%
-    rename("GoodeR.ID"=".")%>%
-    left_join(df,by="GoodeR.ID")%>%
-    select(GoodeR.ID,column)
-  names(data)=c("GoodeR.ID","data")
-  list=data%>%
+# df is a dataframe with minimum of GoodeR.ID and 1 data column,
+# filename and column are char strings
+rast_out <- function(df, filename, column) {
+  data <- 1:6961896 %>%
+    as.data.frame() %>%
+    rename("GoodeR.ID" = ".") %>%
+    left_join(df, by = "GoodeR.ID") %>%
+    select(GoodeR.ID, column)
+  names(data) <- c("GoodeR.ID", "data")
+  list <- data %>%
     select(data)
-  list=as.vector(t(list))
-  m=matrix(data=list,nrow=4008,ncol=1737,byrow=FALSE,dimnames=NULL)
-  m=(t(m))
-  r=raster(m)
-  xmin(r)=-20037506.5671
-  xmax(r)=20042493.4328
-  ymin(r)=-8683205.0209
-  ymax(r)=8686794.9791
-  crs(r) = "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"
-  writeRaster(r,filename=filename,type="GTIFF",overwrite=TRUE)
+  list <- as.vector(t(list))
+  m <- matrix(data = list, nrow = 4008, ncol = 1737,
+             byrow = FALSE, dimnames = NULL)
+  m <- (t(m))
+  r <- raster(m)
+  xmin(r) <- -20037506.5671
+  xmax(r) <- 20042493.4328
+  ymin(r) <- -8683205.0209
+  ymax(r) <- 8686794.9791
+  crs(r) <-
+    "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"
+  writeRaster(r, filename = filename, type = "GTIFF", overwrite = TRUE)
 }
 
 #---------------
@@ -80,7 +84,7 @@ temp_dir1 <- file.path(getwd(), sub_dir1)
 temp_dir2 <- file.path(getwd(), sub_dir2)
 
 # create output directories if they don't already exist
-if (!dir.exists(temp_dir1)){
+if (!dir.exists(temp_dir1)) {
   say("")
   say("Creating temp directory...")
   say("")
@@ -91,7 +95,7 @@ if (!dir.exists(temp_dir1)){
   say("")
 }
 
-if (!dir.exists(temp_dir2)){
+if (!dir.exists(temp_dir2)) {
   say("")
   say("Creating Final Outputs directory...")
   say("")
@@ -109,125 +113,134 @@ if (!dir.exists(temp_dir2)){
 
 # Required:
 say("Reading Region Boundaries...")
-GoodeR_Boundaries_Region=read_csv("GoodeR_Boundaries_Region.csv", col_types = cols(GoodeR.ID = col_integer(), Region = col_integer()))
+goode_r_boundaries_region <- read_csv("GoodeR_Boundaries_Region.csv",
+  col_types = cols(GoodeR.ID = col_integer(), Region = col_integer()))
 say("Reading Training Points...")
-TrainingPoints = read_csv("TrainingPointsFull.csv", col_types = cols(GoodeR.ID = col_integer(), Training.Class = col_integer()))
+training_points <- read_csv("TrainingPointsFull.csv",
+  col_types = cols(GoodeR.ID = col_integer(), Training.Class = col_integer()))
 say("Reading Loss Mask...")
-LossMaskFull= read_csv("LossMaskFull.csv", col_types = cols(col_integer(), col_number()))
-GoodeR=1:6961896%>%
-  as.vector()%>%
-  as.data.frame()%>%
-  rename("GoodeR.ID"=".")
+loss_mask_full <- read_csv("LossMaskFull.csv",
+  col_types = cols(col_integer(), col_number()))
+goode_r <- 1:6961896 %>%
+  as.vector() %>%
+  as.data.frame() %>%
+  rename("GoodeR.ID" = ".")
 
 # Optional:
-# Look for GoodeR_SecondaryData in workspace.  Import or notify user it is missing.
-if (TRUE %in% (list.files() == 'GoodeR_SecondaryData.csv')) {
+# Look for GoodeR_SecondaryData in workspace.
+# Import or notify user it is missing.
+if (TRUE %in% (list.files() == "GoodeR_SecondaryData.csv")) {
   say("Reading GoodeR_SecondaryData...")
-  GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData.csv")
-  GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-    filter(GoodeR_SecondaryData[41]>0)
+  goode_r_secondary_data <- read_csv("GoodeR_SecondaryData.csv")
+  goode_r_secondary_data <- goode_r_secondary_data %>%
+    filter(goode_r_secondary_data[41] > 0)
 } else {
   say("Secondary Data not found in workspace.  It will be calculated.")
 }
 
-# Look for TrainingPoints_PrimaryData in workspace.  Import or notify user it is missing.
-if (TRUE %in% (list.files() == 'TrainingPoints_PrimaryData.csv')) {
+# Look for TrainingPoints_PrimaryData in workspace.
+# Import or notify user it is missing.
+if (TRUE %in% (list.files() == "TrainingPoints_PrimaryData.csv")) {
   say("Reading Training Points...")
-  TrainingPoints_PrimaryData=read_csv("TrainingPoints_PrimaryData.csv") 
+  training_points_primary_data <- read_csv("TrainingPoints_PrimaryData.csv")
 } else {
-  say("Training Points Primary Data not found in workspace.  It will be calculated.")
+  say(paste("Training Points Primary Data not found in workspace. ",
+            "It will be calculated.", sep = ""))
 }
 
 # Get list of primary data files
-PrimaryFileList=as.data.frame(list.files(path = "./R_ModelInputs_PrimaryData",
-                                  pattern = ".tif$", all.files = FALSE,
-                                  full.names = FALSE, recursive = FALSE,
-                                  ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE))
-names(PrimaryFileList)=c("FileName")
-PrimaryVariables <- PrimaryFileList
-names(PrimaryVariables)=c("Name")
+primary_file_list <- as.data.frame(
+  list.files(path = "./R_ModelInputs_PrimaryData",
+             pattern = ".tif$", all.files = FALSE,
+             full.names = FALSE, recursive = FALSE,
+             ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE))
+names(primary_file_list) <- c("FileName")
+primary_variables <- primary_file_list
+names(primary_variables) <- c("Name")
 # Strip file prefixes and suffixes
-PrimaryVariables$Name <- PrimaryVariables$Name %>%
-  str_replace("Goode_","") %>%
-  str_replace(".tif","")
+primary_variables$Name <- primary_variables$Name %>%
+  str_replace("Goode_", "") %>%
+  str_replace(".tif", "")
 
 # Get list of secondary data files
-SecondaryFileList=as.data.frame(list.files(path = "./R_ModelInputs_SecondaryData",
-                                           pattern = ".tif$", all.files = FALSE,
-                                           full.names = FALSE, recursive = FALSE,
-                                           ignore.case = FALSE, include.dirs = FALSE,
-                                           no.. = FALSE))
-names(SecondaryFileList)=c("FileName")
-SecondaryVariables <- SecondaryFileList
-names(SecondaryVariables) = c("Name")
+secondary_file_list <- as.data.frame(
+  list.files(path = "./R_ModelInputs_SecondaryData",
+             pattern = ".tif$", all.files = FALSE,
+             full.names = FALSE, recursive = FALSE,
+             ignore.case = FALSE, include.dirs = FALSE,
+             no.. = FALSE))
+names(secondary_file_list) <- c("FileName")
+secondary_variables <- secondary_file_list
+names(secondary_variables) <- c("Name")
 # Strip file prefix and suffix
-SecondaryVariables$Name <- SecondaryVariables$Name %>%
-  str_replace("Goode_","") %>%
-  str_replace(".tif","")
+secondary_variables$Name <- secondary_variables$Name %>%
+  str_replace("Goode_", "") %>%
+  str_replace(".tif", "")
 
 #---------------
 # Create Training points with data #
 #---------------
-  
+
 say("Checking inputs for TrainingPoints_PrimaryData...")
 
-for(NAME in PrimaryFileList$FileName){
-  data=raster(paste("./R_ModelInputs_PrimaryData/",NAME,sep=""))
-  
-  if(nrow(data)!=1737){
+for (NAME in primary_file_list$FileName){
+  data <- raster(paste("./R_ModelInputs_PrimaryData/", NAME, sep = ""))
+
+  if (nrow(data) != 1737) {
     bad(c(NAME, "has a problem"))
-  } else{
-    if (ncol(data)!=4008) {
+  } else {
+    if (ncol(data) != 4008) {
       bad(c(NAME, "has a problem"))
-    }else{
+    } else {
       say(c(NAME, "looks good"))
     }
   }
 }
 
-say("If all inputs look good, press Enter, if any failed, press Ctrl+C then Enter to quit and fix them.")
+say(paste("If all inputs look good, press Enter, if any failed,",
+    " press Ctrl+C then Enter to quit and fix them.", sep = ""))
 pause()
 
 say("Calculating Training Points")
-TrainingIDs=as.data.frame(c(1:nrow(TrainingPoints)))
-names(TrainingIDs)=c("TrainingID")
+training_ids <- as.data.frame(c(1:nrow(training_points)))
+names(training_ids) <- c("TrainingID")
 # Make columns for each driver (1 is that class, 0 is not that class)
-TrainingPoints=TrainingPoints%>%
-  bind_cols(TrainingIDs)%>%
-  mutate(Deforestation=ifelse(Training.Class==1,1,0))%>%
-  mutate(Shifting.Agriculture=ifelse(Training.Class==2,1,0))%>%
-  mutate(TreeFarm.ForestryOther=ifelse(Training.Class==3,1,0))%>%
-  mutate(Wildfire=ifelse(Training.Class==4,1,0))%>%
-  mutate(Urban=ifelse(Training.Class==5,1,0))
+training_points <- training_points %>%
+  bind_cols(training_ids) %>%
+  mutate(Deforestation = ifelse(Training.Class == 1, 1, 0)) %>%
+  mutate(Shifting.Agriculture = ifelse(Training.Class == 2, 1, 0)) %>%
+  mutate(TreeFarm.ForestryOther = ifelse(Training.Class == 3, 1, 0)) %>%
+  mutate(Wildfire = ifelse(Training.Class == 4, 1, 0)) %>%
+  mutate(Urban = ifelse(Training.Class == 5, 1, 0))
 
-
-TrainingPoints_PrimaryData=TrainingPoints%>% # this isn't filtering out class 6 (flooding?)
-  filter(Training.Class!=7)
+# this isn't filtering out class 6 (flooding?)
+training_points_primary_data <- training_points %>%
+  filter(Training.Class != 7)
 #activate this
 #write_csv(TrainingPoints,"TrainingPoints19.csv")
 
-for(NAME in PrimaryFileList$FileName){
-  say(c("Reading", NAME))
-  data=raster(paste("./R_ModelInputs_PrimaryData/",NAME,sep=""))
-  NAME2=NAME%>%
-    str_replace("^Goode_", "")%>%
+for (name_1 in primary_file_list$FileName){
+  say(c("Reading", name_1))
+  data <- raster(paste("./R_ModelInputs_PrimaryData/", name_1, sep = ""))
+  name_2 <- name_1 %>%
+    str_replace("^Goode_", "") %>%
     str_replace(".tif$", "")
   ## Select GRID data raster ##
-  data=data%>%
-    as.vector()%>%
+  data <- data %>%
+    as.vector() %>%
     as.data.frame()
-  names(data)=c(paste(NAME2))
+  names(data) <- c(paste(name_2))
   ## create R.ID list ##
-  GoodeRList=1:6961896%>%
-    as.vector()%>%
-    as.data.frame()%>%
-    rename("GoodeR.ID"=".")%>%
+  goode_r_list <- 1:6961896 %>%
+    as.vector() %>%
+    as.data.frame() %>%
+    rename("GoodeR.ID" = ".") %>%
     bind_cols(data)
-  TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
-    left_join(GoodeRList,by="GoodeR.ID")
+  training_points_primary_data <- training_points_primary_data %>%
+    left_join(goode_r_list, by = "GoodeR.ID")
 }
-TrainingPoints_PrimaryData[is.na(TrainingPoints_PrimaryData)]=0
-TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
+training_points_primary_data[is.na(training_points_primary_data)] <- 0
+training_points_primary_data <- training_points_primary_data %>%
   distinct()
 
 #---------------
@@ -237,40 +250,40 @@ TrainingPoints_PrimaryData=TrainingPoints_PrimaryData%>%
 
 say("Calculating GoodeR_SecondaryData...")
 
-GoodeR_SecondaryData=LossMaskFull%>%
-  filter(LossMaskFull[2] > 0)%>%
+goode_r_secondary_data <- loss_mask_full %>%
+  filter(loss_mask_full[2] > 0) %>%
   select(GoodeR.ID)
-tppd=TrainingPoints_PrimaryData%>%
-  select(GoodeR.ID,TrainingID)
-GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-  left_join(tppd,by="GoodeR.ID")
-GoodeR_SecondaryData$TrainingID[is.na(GoodeR_SecondaryData$TrainingID)]=0
+tppd <- training_points_primary_data %>%
+  select(GoodeR.ID, TrainingID)
+goode_r_secondary_data <- goode_r_secondary_data %>%
+  left_join(tppd, by = "GoodeR.ID")
+goode_r_secondary_data$TrainingID[is.na(goode_r_secondary_data$TrainingID)] <- 0
 
-for(NAME in SecondaryFileList$FileName){
-  
-  data=raster(paste("./R_ModelInputs_SecondaryData/",NAME,sep=""))
-  
-  say(c("Reading ", NAME))
-  
-  NAME2=NAME%>%
-    str_replace("^Goode_", "")%>%
+for (name_1 in secondary_file_list$FileName){
+
+  data <- raster(paste("./R_ModelInputs_SecondaryData/", name_1, sep = ""))
+
+  say(c("Reading ", name_1))
+
+  name_2 <- name_1 %>%
+    str_replace("^Goode_", "") %>%
     str_replace(".tif$", "")
-  
+
   ## Select GRID data raster ##
-  data=data%>%
-    as.vector()%>%
+  data <- data %>%
+    as.vector() %>%
     as.data.frame()
-  names(data)=c(paste(NAME2))
+  names(data) <- c(paste(name_2))
   ## create R.ID list ##
-  GoodeRList=GoodeR%>%
+  goode_r_list <- goode_r %>%
     bind_cols(data)
-  GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-    left_join(GoodeRList,by="GoodeR.ID")
+  goode_r_secondary_data <- goode_r_secondary_data %>%
+    left_join(goode_r_list, by = "GoodeR.ID")
 }
-GoodeR_SecondaryData[is.na(GoodeR_SecondaryData)]=0
-GoodeR_SecondaryData=GoodeR_SecondaryData%>%
-  left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")
-GoodeR_SecondaryData=GoodeR_SecondaryData%>%
+goode_r_secondary_data[is.na(goode_r_secondary_data)] <- 0
+goode_r_secondary_data <- goode_r_secondary_data %>%
+  left_join(goode_r_boundaries_region, by = "GoodeR.ID")
+goode_r_secondary_data <- goode_r_secondary_data %>%
    filter(!is.na(Region))
 
 #----
@@ -280,78 +293,105 @@ GoodeR_SecondaryData=GoodeR_SecondaryData%>%
 #-----------------------
 
 regions <- c(1, 2, 3, 4, 5, 6, 7)
-driverNames <- c("Deforestation", "Shifting.Agriculture", "TreeFarm.ForestryOther", "Wildfire", "Urban")
+driver_names <- c("Deforestation",
+                 "Shifting.Agriculture",
+                 "TreeFarm.ForestryOther",
+                 "Wildfire",
+                 "Urban")
 drivers <- c(1, 2, 3, 4, 5)
-ModelOutput <- list()
-ModelOutput.Regional <- list()
-if (rplots){pdf(paste(sub_dir2,'DecisionTrees.pdf',sep='/'))}
-importance <- data.frame(matrix(vector(), ncol=length(PrimaryVariables$Name)))
-names(importance) <- PrimaryVariables$Name
+model_output <- list()
+model_output_regional <- list()
+if (rplots) {
+  pdf(paste(sub_dir2, "DecisionTrees.pdf", sep = "/"))
+}
+importance <- data.frame(
+  matrix(vector(),
+  ncol = length(primary_variables$Name)))
+names(importance) <- primary_variables$Name
 #regionalOutputs <- list()
 
 
 for (region in regions){
   say("")
   say("********************")
-  say(c("* Setting up Region",region))
+  say(c("* Setting up Region", region))
   say("********************")
-  
+
   # extract only training points within the current region from the full set
-  TrainingPoints_Regional <- TrainingPoints_PrimaryData%>%
-    left_join(GoodeR_Boundaries_Region, by="GoodeR.ID")%>%
-    mutate(Region=replace(Region,,as.numeric(Region)))%>%
-    filter(Region==c(region))
+  training_points_regional <- training_points_primary_data %>%
+    left_join(goode_r_boundaries_region, by = "GoodeR.ID") %>%
+    mutate(Region = replace(Region, , as.numeric(Region))) %>%
+    filter(Region == c(region))
 
   for (driver in drivers){
-    say(c("Calculating",driverNames[driver],"Tree..."))
-    
+    say(c("Calculating", driver_names[driver], "Tree..."))
+
     # select the column for the current driver, then all variable columns
-    InputData <- select(TrainingPoints_Regional,driverNames[driver],PrimaryVariables$Name[1]:PrimaryVariables$Name[length(PrimaryVariables$Name)])
-    
-    # give rpart a formula where the current driver is defined as the sum of all variables in Variables$Name, pass InputData and define method
-    fit <- rpart(as.formula(paste(paste(driverNames[driver],"~",sep=""),paste(PrimaryVariables$Name, collapse="+"))),data=InputData,method = "anova")
-    fit=prune(fit,cp=.02)
-    
+    num_variables <- length(primary_variables$Name)
+    input_data <- select(training_points_regional,
+                        driver_names[driver],
+                        primary_variables$Name[1]:primary_variables$Name[num_variables])
+
+    # give rpart a formula where the current driver is defined
+    # as the sum of all variables in Variables$Name,
+    # pass InputData and define method
+    fit <- rpart(as.formula(paste(paste(driver_names[driver], "~", sep = ""),
+      paste(primary_variables$Name, collapse = "+"))),
+      data = input_data,
+      method = "anova")
+    fit <- prune(fit, cp = .02)
+
     # plot the tree and give it a title of 'Region: Driver'
-    if (rplots){
-      name <- paste("Region", region, ":", driverNames[driver], sep = " ")
+    if (rplots) {
+      name <- paste("Region", region, ":", driver_names[driver], sep = " ")
       fancyRpartPlot(fit, main = name)
       importance <- bind_rows(importance, fit$variable.importance)
     }
     #cat(name)
-    
+
     # generate name for model output field
-    outName <- paste("Output", driverNames[driver], sep = "_")
-    
+    out_name <- paste("Output", driver_names[driver], sep = "_")
+
     # calculate probability of current driver for whole dataset
-    # Give tree full dataset and record probability for each (to be used later in regional voting)
-    ModelOutput[[driver]] = GoodeR_SecondaryData%>%
-      select(GoodeR.ID)%>%
-      left_join(GoodeR_Boundaries_Region,by="GoodeR.ID")%>%
-      # the "!! outName :=" uses the variable value as the new column name, rather than the literal string 'outName'
-      mutate(!!outName := predict(fit, type="vector", newdata=GoodeR_SecondaryData))%>%
-      filter(Region==paste(region))%>%
+    # Give tree full dataset and record probability for each (to be
+    # used later in regional voting)
+    model_output[[driver]] <- goode_r_secondary_data %>%
+      select(GoodeR.ID) %>%
+      left_join(goode_r_boundaries_region, by = "GoodeR.ID") %>%
+      # the "!! outName :=" uses the variable value as the new
+      # column name, rather than the literal string 'outName'
+      mutate(!!out_name := predict(fit,
+                                   type = "vector",
+                                   newdata = goode_r_secondary_data)) %>%
+      filter(Region == paste(region)) %>%
       select(-Region)
   }
   # Collect class probabilities from each tree in ModelOutput.Full
-  ModelOutput.Regional[[region]] <- as.data.frame(Reduce(function(x, y) merge(x, y, by="GoodeR.ID", all.x=TRUE), ModelOutput))
-  
+  model_output_regional[[region]] <- as.data.frame(
+    Reduce(function(x, y) {
+      merge(x, y, by = "GoodeR.ID", all.x = TRUE)
+    }, model_output))
+
   say("********************")
-  say(c("* Region",region,"Complete!"))
+  say(c("* Region", region, "Complete!"))
   say("********************")
 }
 
 # Close and write pdf to file
-if (rplots){dev.off()}
+if (rplots) {
+  dev.off()
+}
 
 # Combine all regions into the final table
-ModelOutput.All <- Reduce(function(x, y) bind_rows(x, y), ModelOutput.Regional)%>%
-  left_join(GoodeR_Boundaries_Region, by='GoodeR.ID')
+model_output_all <- Reduce(function(x, y) {
+  bind_rows(x, y)}, model_output_regional) %>%
+  left_join(goode_r_boundaries_region, by = "GoodeR.ID")
 
 # combine scores for variable importance and write to file
-Total.Importance <- summarise_each(importance, list(~ sum(., na.rm = TRUE)))
+total_importance <- summarise_each(importance, list(~ sum(., na.rm = TRUE)))
 say("Writing variable importance")
-write_csv(Total.Importance, paste(sub_dir2, "Variable.Importance.csv", sep = '/'))
+write_csv(total_importance,
+          paste(sub_dir2, "Variable.Importance.csv", sep = "/"))
 
 
 #---------------
@@ -362,35 +402,42 @@ write_csv(Total.Importance, paste(sub_dir2, "Variable.Importance.csv", sep = '/'
 say("Trees are voting on each pixel...")
 
 # make column names machine readable
-temp=ModelOutput.All%>%
-  select(Output_Deforestation,Output_Shifting.Agriculture,Output_TreeFarm.ForestryOther,Output_Wildfire,Output_Urban)%>%
-  rename("out1" = "Output_Deforestation", "out2" = "Output_Shifting.Agriculture", "out3" = "Output_TreeFarm.ForestryOther",
-         "out4" = "Output_Wildfire", "out5" = "Output_Urban")
+temp <- model_output_all %>%
+  select(Output_Deforestation,
+         Output_Shifting.Agriculture,
+         Output_TreeFarm.ForestryOther,
+         Output_Wildfire,
+         Output_Urban) %>%
+  rename("out1" = "Output_Deforestation",
+         "out2" = "Output_Shifting.Agriculture",
+         "out3" = "Output_TreeFarm.ForestryOther",
+         "out4" = "Output_Wildfire",
+         "out5" = "Output_Urban")
 # get max value for cell
-test=as.data.frame(colnames(temp)[apply(temp,1,which.max)])
-names(test)=c("MaxClass")
+test <- as.data.frame(colnames(temp)[apply(temp, 1, which.max)])
+names(test) <- c("MaxClass")
 # reattach assigned drivers to full output list
-temp=temp%>%
+temp <- temp %>%
   bind_cols(test)
 # Add column for the confidence of the top driver
-MaxClass=temp%>%
-  rowwise()%>%
-  mutate(maxValue=max(out1, out2, out3, out4, out5))
+max_class <- temp %>%
+  rowwise() %>%
+  mutate(maxValue = max(out1, out2, out3, out4, out5))
 # drop 'out' from $MaxClass column, leaving just numbers
-MaxClass$MaxClass <- gsub("out", "", MaxClass$MaxClass)
+max_class$MaxClass <- gsub("out", "", max_class$MaxClass)
 # eliminate any cells whose top score was <50% by setting their value to 0
-MaxClass <- within(MaxClass, MaxClass[maxValue < 0.5] <- 0)%>%
+max_class <- within(max_class, max_class[maxValue < 0.5] <- 0) %>%
   rename("Class" = "MaxClass")
 # convert columns to numeric type
-MaxClass <- transform(MaxClass, Class = as.numeric(Class))
+max_class <- transform(max_class, Class = as.numeric(Class))
 
-ModelOutput.All <- ModelOutput.All %>%
-  bind_cols(MaxClass) %>%
+model_output_all <- model_output_all %>%
+  bind_cols(max_class) %>%
   select(-out1, -out2, -out3, -out4, -out5)
 
-by_region <- ModelOutput.All %>% group_by(Region)
+by_region <- model_output_all %>% group_by(Region)
 
-write_csv(ModelOutput.All, paste(sub_dir2,"ModelOutput.All.csv",sep='/'))
+write_csv(model_output_all, paste(sub_dir2, "ModelOutput.All.csv", sep = "/"))
 
 # MaxClass=MaxClass%>%
 #   mutate(Class=ifelse(maxValue<.5,0,
@@ -400,45 +447,51 @@ write_csv(ModelOutput.All, paste(sub_dir2,"ModelOutput.All.csv",sep='/'))
 #                                            ifelse(MaxClass=="Output_Wildfire",4,
 #                                                   ifelse(MaxClass=="Output_Urban",5,0)
 #                                            ))))))
-MaxClass_Final_19_50uncertain=ModelOutput.All%>%
-  select(GoodeR.ID)%>%
-  bind_cols(MaxClass)%>%
-  left_join(LossMaskFull,by = "GoodeR.ID")%>%
-  mutate(Class2=ifelse(as.numeric(Loss)<.005,0,Class))%>%
-  select(-Class)%>%
-  mutate(Class=Class2)%>%
-  select(-Class2)%>%
+maxclass_final_19_50_uncertain <- model_output_all %>%
+  select(GoodeR.ID) %>%
+  bind_cols(max_class) %>%
+  left_join(loss_mask_full, by = "GoodeR.ID") %>%
+  mutate(Class2 = ifelse(as.numeric(Loss) < .005, 0, Class)) %>%
+  select(-Class) %>%
+  mutate(Class = Class2) %>%
+  select(-Class2) %>%
   select(-Loss)
 
-# Disabling  this because it just creates the possibility of contamination from old data.  If the model is 
-# being run again, it's worth recalculating the secondary data, because presumably, something has changed.
-#
+# Disabling  these because it just creates the possibility of contamination
+# from old data.  If the model is being run again, it's worth recalculating
+# the secondary data, because presumably, something has changed.
+
 # say("Outputting initial class selections to MaxClass_Final_19_50uncertain.csv")
-# 
+
 # write_csv(MaxClass_Final_19_50uncertain,"MaxClass_Final_19_50uncertain.csv")
 #----
 
 #--------------------------------------------------------
-# Initial raster 
+# Initial raster
 #--------------------------------------------------------
 
-MaxClass_Final=MaxClass_Final_19_50uncertain%>%
-  select(GoodeR.ID,Class)
+max_class_final <- maxclass_final_19_50_uncertain %>%
+  select(GoodeR.ID, Class)
 
 
-say("Writing initial class selections to Goode_FinalClassification_19_50uncertain.tiff")
+say(paste("Writing initial class selections to ",
+  "Goode_FinalClassification_19_50uncertain.tiff", sep = ""))
 
-rastOut(MaxClass_Final, "Goode_FinalClassification_19_50uncertain.tiff", "Class")
+rast_out(max_class_final,
+         "Goode_FinalClassification_19_50uncertain.tiff",
+         "Class")
 
 
 #---------------
 # prepare for expand in arcMap
 #---------------
 
-MaxClass_Final <- MaxClass_Final%>%
+max_class_final <- max_class_final %>%
   filter(Class > 0)
 
-rastOut(MaxClass_Final, "Goode_FinalClassification_19_Excludeduncertain.tif", "Class")
+rast_out(max_class_final,
+         "Goode_FinalClassification_19_Excludeduncertain.tif",
+         "Class")
 
 
 
@@ -456,51 +509,59 @@ pause()
 #-------------
 # Calculate % of loss classified (non-mixed/uncertain) #
 #-------------
-temp=GoodeR_SecondaryData%>%
-  select(!!c(1,41))
-Total=sum(temp[2])
+temp <- goode_r_secondary_data %>%
+  select(!!c(1, 41))
+total <- sum(temp[2])
 
-LossClassified=temp%>%
-  left_join(MaxClass_Final_19_50uncertain,by="GoodeR.ID")%>%
-  filter(Class!=0)
-LossClassified=sum(LossClassified[2])/Total
+loss_classified <- temp %>%
+  left_join(maxclass_final_19_50_uncertain, by = "GoodeR.ID") %>%
+  filter(Class != 0)
+loss_classified <- sum(loss_classified[2]) / total
 
-LossUnClassified=temp%>%
-  left_join(MaxClass_Final_19_50uncertain,by="GoodeR.ID")%>%
-  filter(Class==0)
-LossUnClassified=sum(LossUnClassified[2])/Total
+loss_unclassified <- temp %>%
+  left_join(maxclass_final_19_50_uncertain, by = "GoodeR.ID") %>%
+  filter(Class == 0)
+loss_unclassified <- sum(loss_unclassified[2]) / total
 
 say("")
-say(cat("Loss classified:", LossClassified, "%"))
-say(cat("Loss unclassified:", LossUnClassified, "%"))
+say(cat("Loss classified:", loss_classified, "%"))
+say(cat("Loss unclassified:", loss_unclassified, "%"))
 say("")
 #-----
 
-# This step is already done when creating the initial classification raster.  Not necessary, remove after testing.
+# This step is already done when creating the initial classification raster.
+# Not necessary, remove after testing.
 #-----------------------------------------
-# Re-import Expanded classes (no Uncertain class) mask out areas with loss less than 0.5% loss
+# Re-import Expanded classes (no Uncertain class) mask out areas with
+# loss less than 0.5% loss
 #-----------------------------------------
 
-data=raster("R_FinalOutputs/Goode_FinalClassification_19_50uncertain_expanded_05pcnt.tif")
-data=as.vector(data)%>%
+data <- raster(paste("R_FinalOutputs/",
+  "Goode_FinalClassification_19_50uncertain_expanded_05pcnt.tif", sep = ""))
+data <- as.vector(data) %>%
   as.data.frame()
-names(data)=c("Class")
+names(data) <- c("Class")
 # create R.ID list ##
-RasterList=1:6961896%>%
-  as.vector()%>%
+raster_list <- 1:6961896 %>%
+  as.vector() %>%
   as.data.frame()
-names(RasterList)=c("GoodeR.ID")
-temp=RasterList%>%
-  bind_cols(data)%>%
-  inner_join(LossMaskFull,by="GoodeR.ID")%>%
-  mutate(Class2=ifelse(as.numeric(Loss_10kMean_20002016)>0&as.numeric(Loss_10kMean_20002016)<.005,0,Class))%>%
-  mutate(Class.Final=round(Class2,0))%>%
-  select(-Class,Class2,-Loss_10kMean_20002016)
+names(raster_list) <- c("GoodeR.ID")
+temp <- raster_list %>%
+  bind_cols(data) %>%
+  inner_join(loss_mask_full, by = "GoodeR.ID") %>%
+  loss_numeric <- as.numeric(Loss_10kMean_20002016)
+  mutate(class_2 <- ifelse(
+      loss_numeric > 0 & loss_numeric < .005, 0, Class)) %>%
+  mutate(class_final <- round(Class2, 0)) %>%
+  select(-Class, Class2, -Loss_10kMean_20002016)
 
-Goode_FinalClassification19_Expand_05pcnt=temp
-writeRaster(Goode_FinalClassification19_Expand_05pcnt, filename = "R_FinalOutputs/TestMask.tif", type="GTIFF", overwrite = TRUE)
+Goode_FinalClassification19_Expand_05pcnt <- temp
+writeRaster(Goode_FinalClassification19_Expand_05pcnt,
+            filename = "R_FinalOutputs/TestMask.tif",
+            type = "GTIFF",
+            overwrite = TRUE)
 
-write_csv(Goode_FinalClassification19_Expand_05pcnt,"FinalClass_19_05pcnt.csv")
+write_csv(Goode_FinalClassification19_Expand_05pcnt, "FinalClass_19_05pcnt.csv")
 #-----
 
 #--------------------------------------------------------
@@ -509,46 +570,64 @@ write_csv(Goode_FinalClassification19_Expand_05pcnt,"FinalClass_19_05pcnt.csv")
 
 say("Generating loss masks for each class")
 #FinalClass_19 = read_csv("./FinalClass_19_05pcnt.csv", col_types = cols(Class.Final = col_integer()))
-FinalClass_19 = Goode_FinalClassification19_Expand_05pcnt
+final_class_19 <- Goode_FinalClassification19_Expand_05pcnt
 
 #GoodeR_SecondaryData=read_csv("GoodeR_SecondaryData.csv")
 
-LossData=GoodeR_SecondaryData%>%
-  select(GoodeR.ID,Loss_10kMean_20002016)%>%
-  group_by(GoodeR.ID)%>%
-  summarize(Loss_10kMean_20002016=mean(Loss_10kMean_20002016,na.rm=TRUE))%>%
-  ungroup()%>%
-  left_join(FinalClass_19,by="GoodeR.ID")
+loss_data <- goode_r_secondary_data %>%
+  select(GoodeR.ID, Loss_10kMean_20002016) %>%
+  group_by(GoodeR.ID) %>%
+  summarize(Loss_10kMean_20002016 =
+    mean(Loss_10kMean_20002016, na.rm = TRUE)) %>%
+  ungroup() %>%
+  left_join(final_class_19, by = "GoodeR.ID")
 
-LossMask_19_Deforestation=LossData%>%
-  filter(Class.Final==1)
-write_csv(LossMask_19_Deforestation,"LossMask_19_Deforestation.csv")
-rastOut(LossMask_19_Deforestation, "LossMask_19_Deforestation.tif", Loss_10kMean_20002016)
+loss_mask_19_deforestation <- loss_data %>%
+  filter(Class.Final == 1)
+write_csv(loss_mask_19_deforestation, "LossMask_19_Deforestation.csv")
+rast_out(loss_mask_19_deforestation,
+         "LossMask_19_Deforestation.tif",
+         Loss_10kMean_20002016)
 
-LossMask_19_Shifting.Agriculture=LossData%>%
-  filter(Class.Final==2)
-write_csv(LossMask_19_Shifting.Agriculture,"LossMask_19_Shifting.Agriculture.csv")
-rastOut(LossMask_19_Shifting.Agriculture, "LossMask_19_Shifting.Agriculture.tif", Loss_10kMean_20002016)
+loss_mask_19_shifting_ag <- loss_data %>%
+  filter(Class.Final == 2)
+write_csv(loss_mask_19_shifting_ag,
+          "LossMask_19_Shifting.Agriculture.csv")
+rast_out(loss_mask_19_shifting_ag,
+         "LossMask_19_Shifting.Agriculture.tif",
+         Loss_10kMean_20002016)
 
-LossMask_19_Forestry=LossData%>%
-  filter(Class.Final==3)
-write_csv(LossMask_19_Forestry,"LossMask_19_Forestry.csv")
-rastOut(LossMask_19_Forestry, "LossMask_19_Forestry.tif", Loss_10kMean_20002016)
+loss_mask_19_forestry <- loss_data %>%
+  filter(Class.Final == 3)
+write_csv(loss_mask_19_forestry,
+          "LossMask_19_Forestry.csv")
+rast_out(loss_mask_19_forestry,
+         "LossMask_19_Forestry.tif",
+         Loss_10kMean_20002016)
 
-LossMask_19_Wildfire=LossData%>%
-  filter(Class.Final==4)
-write_csv(LossMask_19_Wildfire,"LossMask_19_Wildfire.csv")
-rastOut(LossMask_19_Wildfire, "LossMask_19_Wildfire.tif", Loss_10kMean_20002016)
+loss_mask_19_wildfire <- loss_data %>%
+  filter(Class.Final == 4)
+write_csv(loss_mask_19_wildfire,
+          "LossMask_19_Wildfire.csv")
+rast_out(loss_mask_19_wildfire,
+         "LossMask_19_Wildfire.tif",
+         Loss_10kMean_20002016)
 
-LossMask_19_Urban=LossData%>%
-  filter(Class.Final==5)
-write_csv(LossMask_19_Urban,"LossMask_19_Urban.csv")
-rastOut(LossMask_19_Urban, "LossMask_19_Urban.tif", Loss_10kMean_20002016)
+loss_mask_19_urban <- loss_data %>%
+  filter(Class.Final == 5)
+write_csv(loss_mask_19_urban,
+          "LossMask_19_Urban.csv")
+rast_out(loss_mask_19_urban,
+         "LossMask_19_Urban.tif",
+         Loss_10kMean_20002016)
 
-LossMask_19_MinorLoss=LossData%>%
-  filter(Class.Final==0)
-write_csv(LossMask_19_MinorLoss,"LossMask_19_MinorLoss.csv")
-rastOut(LossMask_19_MinorLoss, "LossMask_19_MinorLoss.tif", Loss_10kMean_20002016)
+loss_mask_19_minor_loss <- loss_data %>%
+  filter(Class.Final == 0)
+write_csv(loss_mask_19_minor_loss,
+          "LossMask_19_MinorLoss.csv")
+rast_out(loss_mask_19_minor_loss, 
+         "LossMask_19_MinorLoss.tif",
+         Loss_10kMean_20002016)
 #---
 
 #---------------------

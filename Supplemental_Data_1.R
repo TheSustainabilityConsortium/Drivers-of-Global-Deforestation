@@ -625,7 +625,7 @@ loss_mask_19_minor_loss <- loss_data %>%
   filter(Class.Final == 0)
 write_csv(loss_mask_19_minor_loss,
           "LossMask_19_MinorLoss.csv")
-rast_out(loss_mask_19_minor_loss, 
+rast_out(loss_mask_19_minor_loss,
          "LossMask_19_MinorLoss.tif",
          Loss_10kMean_20002016)
 #---

@@ -53,7 +53,7 @@ bad <- function(words) {
 # df is a dataframe with minimum of GoodeR.ID and 1 data column,
 # filename and column are char strings
 rast_out <- function(df, filename, column) {
-  data <- 1:6961896 %>%
+  data <- 1:695959816 %>%
     as.data.frame() %>%
     rename("GoodeR.ID" = ".") %>%
     left_join(df, by = "GoodeR.ID") %>%
@@ -62,14 +62,14 @@ rast_out <- function(df, filename, column) {
   list <- data %>%
     select(data)
   list <- as.vector(t(list))
-  m <- matrix(data = list, nrow = 4008, ncol = 1737,
+  m <- matrix(data = list, nrow = 40076, ncol = 17366,
              byrow = FALSE, dimnames = NULL)
   m <- (t(m))
   r <- raster(m)
   xmin(r) <- -20037506.5671
-  xmax(r) <- 20042493.4328
+  xmax(r) <- 20038493.4329
   ymin(r) <- -8683205.0209
-  ymax(r) <- 8686794.9791
+  ymax(r) <- 8682794.9791
   crs(r) <-
     "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"
   writeRaster(r, filename = filename, type = "GTIFF", overwrite = TRUE)
@@ -121,7 +121,7 @@ training_points <- read_csv("TrainingPointsFull.csv",
 say("Reading Loss Mask...")
 loss_mask_full <- read_csv("LossMaskFull.csv",
   col_types = cols(col_integer(), col_number()))
-goode_r <- 1:6961896 %>%
+goode_r <- 1:695959816 %>%
   as.vector() %>%
   as.data.frame() %>%
   rename("GoodeR.ID" = ".")
@@ -186,10 +186,10 @@ say("Checking inputs for TrainingPoints_PrimaryData...")
 for (NAME in primary_file_list$FileName){
   data <- raster(paste("./R_ModelInputs_PrimaryData/", NAME, sep = ""))
 
-  if (nrow(data) != 1737) {
+  if (nrow(data) != 17366) {
     bad(c(NAME, "has a problem"))
   } else {
-    if (ncol(data) != 4008) {
+    if (ncol(data) != 40076) {
       bad(c(NAME, "has a problem"))
     } else {
       say(c(NAME, "looks good"))
@@ -231,7 +231,7 @@ for (name_1 in primary_file_list$FileName){
     as.data.frame()
   names(data) <- c(paste(name_2))
   ## create R.ID list ##
-  goode_r_list <- 1:6961896 %>%
+  goode_r_list <- 1:695959816 %>%
     as.vector() %>%
     as.data.frame() %>%
     rename("GoodeR.ID" = ".") %>%
@@ -542,7 +542,7 @@ data <- as.vector(data) %>%
   as.data.frame()
 names(data) <- c("Class")
 # create R.ID list ##
-raster_list <- 1:6961896 %>%
+raster_list <- 1:695959816 %>%
   as.vector() %>%
   as.data.frame()
 names(raster_list) <- c("GoodeR.ID")

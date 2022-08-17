@@ -19,12 +19,12 @@ repo <- "http://cran.us.r-project.org"
 package_list <- c("rgdal", "raster", "dplyr", "foreign", "tidyr", "readr",
                  "stringr", "rpart", "rpart.plot", "rattle", "crayon")
 # if packages in package.list aren't installed, put their name in new.packages
-new_packages <- package.list[
+new_packages <- package_list[
   !(package_list %in% installed.packages()[, "Package"])]
 # if new.packages has items in it, install them
-if (length(new.packages)) install.packages(new.packages, repos = repo)
+if (length(new.packages)) install.packages(new_packages, repos = repo)
 # Load the packages
-lapply(package.list, library, character.only = TRUE)
+lapply(package_list, library, character.only = TRUE)
 
 
 #---------------

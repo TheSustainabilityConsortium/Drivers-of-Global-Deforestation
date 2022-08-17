@@ -4,9 +4,6 @@
 # set to true if you want the model to output all the decision trees
 rplots <- TRUE
 
-# set this to the directory you will run this script from
-setwd("E:/Forestry Model/")
-
 # set a repo to use for installing dependencies
 # (repo list: https://cran.r-project.org/mirrors.html)
 repo <- "http://cran.us.r-project.org"

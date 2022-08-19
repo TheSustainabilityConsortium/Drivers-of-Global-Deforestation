@@ -180,21 +180,28 @@ secondary_variables$Name <- secondary_variables$Name %>%
 
 say("Checking inputs for TrainingPoints_PrimaryData...")
 
+error = 0
 for (NAME in primary_file_list$FileName){
   data <- raster(paste("./R_ModelInputs_PrimaryData/", NAME, sep = ""))
 
-  if (nrow(data) != 17366) {
-    bad(c(NAME, "has a problem"))
+  if (nrow(data) != 17371) {
+    error <- error + 1
+    bad(c(NAME, "has ", nrow(data), " rows, expected 17371"))
   } else {
-    if (ncol(data) != 40076) {
-      bad(c(NAME, "has a problem"))
+    if (ncol(data) != 40081) {
+      error <- error + 1
+      bad(c(NAME, " has ", ncol(data), " columns, expected 40081"))
     } else {
       say(c(NAME, "looks good"))
     }
   }
 }
-
-say(paste("If all inputs look good, press Enter, if any failed,",
+if (error > 0) {
+  say(c(error, " files had problems."))
+} else {
+  say("Everything looks good!!!")
+}
+say(paste("If all inputs look good, press Enter. if any failed,",
     " press Ctrl+C then Enter to quit and fix them.", sep = ""))
 pause()
 

@@ -59,14 +59,14 @@ rast_out <- function(df, filename, column) {
   list <- data %>%
     select(data)
   list <- as.vector(t(list))
-  m <- matrix(data = list, nrow = 40076, ncol = 17366,
+  m <- matrix(data = list, nrow = 40081, ncol = 17371,
              byrow = FALSE, dimnames = NULL)
   m <- (t(m))
   r <- raster(m)
-  xmin(r) <- -20037506.5671
-  xmax(r) <- 20038493.4329
+  xmin(r) <- -20038506.5671
+  xmax(r) <- 20042493.4329
   ymin(r) <- -8683205.0209
-  ymax(r) <- 8682794.9791
+  ymax(r) <- 8687794.9791
   crs(r) <-
     "+proj=igh +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +"
   writeRaster(r, filename = filename, type = "GTIFF", overwrite = TRUE)
